@@ -63,6 +63,7 @@ def ControlMesh(n, length):
            # setMaterial(bpy.context.object, red)
     return vertices
 
+
 #Creates a mesh from vertices and triangles
 #Source: https://wiki.blender.org/index.php/Dev:Py/Scripts/Cookbook/Code_snippets/Three_ways_to_create_objects  
 def createMeshFromData(name, origin, vertices, faces):
@@ -84,8 +85,17 @@ def createMeshFromData(name, origin, vertices, faces):
     me.update()    
     return ob
 
-def ShowMesh(A, n):
-    pass
+def CreateFacesFromMesh(n):
+	faces = []
+	for y in range (0, n-2):
+		for x in range (0, n-2):
+			faces.append([x, x + 1, x + n, x + n + 1])
+	return faces
+
+def ShowMesh(vertices, n):
+    faces = CreateFacesFromMesh(n)
+    createMeshFromData("Carlo", (0,0,0), vertices, faces)
+    print(vertices)
     
 def DeCasteljau(A, n, s):
     return []
@@ -107,10 +117,7 @@ def main(operator, context):
     p2 = (3,4,5)
 
     print(LineIntersect(A, n, p1, p2, 0.01))
-    coords=[ [-1,-1,-1], [1,-1,-1], [1,1,-1], [-1,1,-1], [0,0,1] ]  
-    faces= [ [3,2,1,0], [0,1,4], [1,2,4], [2,3,4], [3,0,4] ]
-    createMeshFromData("Carlo", (0,0,0), coords, faces)
-    
+
 # BLENDER UI
 # ----------
 
