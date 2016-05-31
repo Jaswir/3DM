@@ -54,14 +54,35 @@ def ControlMesh(n, length):
             z = 0
             if not(IsOutervertex(x, y, n)):
                 z = random.uniform(step, length/2)
-            size = 0.01
+            #size = 0.01
             vertices.append((y*step, x*step, z))
-            red = makeMaterial('Red',(1,0,0),(1,1,1),1)
-            origin = (y*step, x*step, z)
-            bpy.ops.mesh.primitive_uv_sphere_add(location=origin)
-            bpy.ops.transform.resize(value=(size, size, size))
-            setMaterial(bpy.context.object, red)
+            #red = makeMaterial('Red',(1,0,0),(1,1,1),1)
+            #origin = (y*step, x*step, z)
+            #bpy.ops.mesh.primitive_uv_sphere_add(location=origin)
+            #bpy.ops.transform.resize(value=(size, size, size))
+           # setMaterial(bpy.context.object, red)
     return vertices
+
+#Creates a mesh from vertices and triangles
+#Source: https://wiki.blender.org/index.php/Dev:Py/Scripts/Cookbook/Code_snippets/Three_ways_to_create_objects  
+def createMeshFromData(name, origin, vertices, faces):
+    # Create mesh and object
+    me = bpy.data.meshes.new(name+'Mesh')
+    ob = bpy.data.objects.new(name, me)
+    ob.location = origin
+    ob.show_name = True
+ 
+    # Link object to scene and make active
+    scn = bpy.context.scene
+    scn.objects.link(ob)
+    scn.objects.active = ob
+    ob.select = True
+ 
+    # Create mesh from given vertices, faces.
+    me.from_pydata(vertices, [], faces)
+    # Update mesh with new data
+    me.update()    
+    return ob
 
 def ShowMesh(A, n):
     pass
@@ -86,6 +107,9 @@ def main(operator, context):
     p2 = (3,4,5)
 
     print(LineIntersect(A, n, p1, p2, 0.01))
+    coords=[ [-1,-1,-1], [1,-1,-1], [1,1,-1], [-1,1,-1], [0,0,1] ]  
+    faces= [ [3,2,1,0], [0,1,4], [1,2,4], [2,3,4], [3,0,4] ]
+    createMeshFromData("Carlo", (0,0,0), coords, faces)
     
 # BLENDER UI
 # ----------
