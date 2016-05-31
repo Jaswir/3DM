@@ -53,7 +53,7 @@ def ControlMesh(n, length):
         for x in range (0, n):
             z = 0
             if not(IsOutervertex(x, y, n)):
-                z = random.uniform(step, length/2)
+                z =  random.uniform(step, 0.2)
             #size = 0.01
             vertices.append((y*step, x*step, z))
             #red = makeMaterial('Red',(1,0,0),(1,1,1),1)
@@ -87,15 +87,16 @@ def createMeshFromData(name, origin, vertices, faces):
 
 def CreateFacesFromMesh(n):
 	faces = []
-	for y in range (0, n-2):
-		for x in range (0, n-2):
-			faces.append([x, x + 1, x + n, x + n + 1])
+	for y in range (0, n - 1):
+		for x in range (0, n - 1):
+			faces.append([x + y * n, x + y * n + 1, x + n + y * n, x + n + y * n + 1])
+	faces.append((0, 3, 12, 15))
 	return faces
 
 def ShowMesh(vertices, n):
     faces = CreateFacesFromMesh(n)
     createMeshFromData("Carlo", (0,0,0), vertices, faces)
-    print(vertices)
+    print(faces)
     
 def DeCasteljau(A, n, s):
     return []
@@ -111,7 +112,7 @@ def main(operator, context):
     
     A = ControlMesh(n, length)
     B = DeCasteljau(A, n, s)
-    ShowMesh(B, n)
+    ShowMesh(A, n)
     
     p1 = (1,2,3)
     p2 = (3,4,5)
