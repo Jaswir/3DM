@@ -53,14 +53,14 @@ def ControlMesh(n, length):
         for x in range (0, n):
             z = 0
             if not(IsOutervertex(x, y, n)):
-                z =  random.uniform(step, 0.2)
+                z =  random.uniform(step, step*3)
             #size = 0.01
             vertices.append((y*step, x*step, z))
             #red = makeMaterial('Red',(1,0,0),(1,1,1),1)
             #origin = (y*step, x*step, z)
             #bpy.ops.mesh.primitive_uv_sphere_add(location=origin)
             #bpy.ops.transform.resize(value=(size, size, size))
-           # setMaterial(bpy.context.object, red)
+            #setMaterial(bpy.context.object, red)
     return vertices
 
 
@@ -83,15 +83,19 @@ def createMeshFromData(name, origin, vertices, faces):
     me.from_pydata(vertices, [], faces)
     # Update mesh with new data
     me.update()    
+
     return ob
 
 def CreateFacesFromMesh(n):
-	faces = []
-	for y in range (0, n - 1):
-		for x in range (0, n - 1):
-			faces.append([x + y * n, x + y * n + 1, x + n + y * n, x + n + y * n + 1])
-	faces.append((0, 3, 12, 15))
-	return faces
+    faces = []
+    for y in range (0, n - 1):
+        for x in range (0, n - 1):
+        	rightTopcorner = x + n + y * n + 1
+        	rightBotcorner = x + y * n + 1
+        	leftBotcorner  = x + y * n
+        	leftTopcorner  = x + n + y * n
+        	faces.append([rightTopcorner, rightBotcorner, leftBotcorner, leftTopcorner])
+    return faces
 
 def ShowMesh(vertices, n):
     faces = CreateFacesFromMesh(n)
@@ -106,8 +110,8 @@ def LineIntersect(A, n, p1, p2, e):
     
 def main(operator, context):
     
-    n = 10
-    length = 1
+    n = 20
+    length = 4
     s = 3
     
     A = ControlMesh(n, length)
