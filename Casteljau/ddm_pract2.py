@@ -104,29 +104,41 @@ def ShowMesh(vertices, n):
     #print(vertices)
     
 def DeCasteljau(A, n, s):
-	if s == 0:
-		return A
-	
-    #holds the vertices for one column
-    column = []
-    
+    if s is 0:
+        return []
+
+    #Holds the vertices for one column
+    row = []    
     # Fill column 
     for index in range(0, n):
-        column.append(A[index*n])
-      
-    points = []   
-    result = column
-    length = n
-    casValue = 0.5
+        row.append(A[index])
 
+
+    stepSize = 0.5/(s+1)
+    totalCasValues = int(1/stepSize)
+    CasRow = []
+    
+    print(totalCasValues+1)
+    #for index in range (0, totalCasValues+1):
+        
+    casValue = 0.5
+    #Holds the points for castelJau algorithm on a curve
+    casPoints = []   
+    result = row
+    length = n
     #Calculates the final point on the curve using casValue
     while(length != 1):
         points = []
-        for index in range(0, length - 1):
-            points.append(result[index]*(1-casValue) + result[index+1]*(casValue))
+        print(length -1)
+        for index in range(0, length-1):
+            casPoints.append(result[index]*(1-casValue) + result[index+1]*(casValue))
+        #result = casPoints
         length -= 1
-        result = points
+    print(result)
+        #CasRow.append(result)
 
+    
+    
     return []
     
 def LineIntersect(A, n, p1, p2, e):
@@ -136,7 +148,7 @@ def main(operator, context):
     
     n = 3
     length = 4
-    s = 3
+    s = 2
     weight = (1 / 3)
 
     A = ControlMesh(n, length)
