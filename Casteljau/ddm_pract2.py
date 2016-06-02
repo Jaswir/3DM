@@ -102,7 +102,14 @@ def ShowMesh(vertices, n):
     createMeshFromData("Carlo", (0,0,0), vertices, faces)
     print(faces)
     
-def DeCasteljau(A, n, s):
+def DeCasteljau(A, n, s, weight):
+	zeroSubDivision = []
+	for index in range(0, n):
+		zeroSubDivision.append(A[index])
+		firstSubDivision = []
+		for pointIndex in range(0, n - 1):
+			firstSubDivision.append(zeroSubDivision[pointIndex] * (weight) + zeroSubDivision[pointIndex + 1] * (1 - weight))
+
     return []
     
 def LineIntersect(A, n, p1, p2, e):
