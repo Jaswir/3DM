@@ -17,6 +17,7 @@ bl_info = {
 
 import bpy
 import random
+import mathutils
 
 from bpy.props import *
 
@@ -55,7 +56,7 @@ def ControlMesh(n, length):
             if not(IsOutervertex(x, y, n)):
                 z =  random.uniform(step, step*3)
             #size = 0.01
-            vertices.append((y*step, x*step, z))
+            vertices.append(mathutils.Vector((y*step, x*step, z)))
             #red = makeMaterial('Red',(1,0,0),(1,1,1),1)
             #origin = (y*step, x*step, z)
             #bpy.ops.mesh.primitive_uv_sphere_add(location=origin)
@@ -90,25 +91,41 @@ def CreateFacesFromMesh(n):
     faces = []
     for y in range (0, n - 1):
         for x in range (0, n - 1):
-        	rightTopcorner = x + n + y * n + 1
-        	rightBotcorner = x + y * n + 1
-        	leftBotcorner  = x + y * n
-        	leftTopcorner  = x + n + y * n
-        	faces.append([rightTopcorner, rightBotcorner, leftBotcorner, leftTopcorner])
+            rightTopcorner = x + n + y * n + 1
+            rightBotcorner = x + y * n + 1
+            leftBotcorner  = x + y * n
+            leftTopcorner  = x + n + y * n
+            faces.append([rightTopcorner, rightBotcorner, leftBotcorner, leftTopcorner])
     return faces
 
 def ShowMesh(vertices, n):
     faces = CreateFacesFromMesh(n)
     createMeshFromData("Carlo", (0,0,0), vertices, faces)
-    print(faces)
+    #print(vertices)
     
-def DeCasteljau(A, n, s, weight):
-	zeroSubDivision = []
-	for index in range(0, n):
-		zeroSubDivision.append(A[index])
-		firstSubDivision = []
-		for pointIndex in range(0, n - 1):
-			firstSubDivision.append(zeroSubDivision[pointIndex] * (weight) + zeroSubDivision[pointIndex + 1] * (1 - weight))
+def DeCasteljau(A, n, s):
+	if s == 0:
+		return A
+	
+    #holds the vertices for one column
+    column = []
+    
+    # Fill column 
+    for index in range(0, n):
+        column.append(A[index*n])
+      
+    points = []   
+    result = column
+    length = n
+    casValue = 0.5
+
+    #Calculates the final point on the curve using casValue
+    while(length != 1):
+        points = []
+        for index in range(0, length - 1):
+            points.append(result[index]*(1-casValue) + result[index+1]*(casValue))
+        length -= 1
+        result = points
 
     return []
     
@@ -117,10 +134,11 @@ def LineIntersect(A, n, p1, p2, e):
     
 def main(operator, context):
     
-    n = 20
+    n = 3
     length = 4
     s = 3
-    
+    weight = (1 / 3)
+
     A = ControlMesh(n, length)
     B = DeCasteljau(A, n, s)
     ShowMesh(A, n)
