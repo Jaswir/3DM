@@ -54,14 +54,8 @@ def ControlMesh(n, length):
         for x in range (0, n):
             z = 0
             if not(IsOutervertex(x, y, n)):
-                z =  random.uniform(step, step*3)
-            #size = 0.01
-            vertices.append(mathutils.Vector((y*step, x*step, z)))
-            #red = makeMaterial('Red',(1,0,0),(1,1,1),1)
-            #origin = (y*step, x*step, z)
-            #bpy.ops.mesh.primitive_uv_sphere_add(location=origin)
-            #bpy.ops.transform.resize(value=(size, size, size))
-            #setMaterial(bpy.context.object, red)
+                z =  random.random()*step*2
+            vertices.append(mathutils.Vector((y*step, x*step, z)))         
     return vertices
 
 
@@ -87,6 +81,8 @@ def createMeshFromData(name, origin, vertices, faces):
 
     return ob
 
+#Given n, generates indices for faces.
+#Where a face is a quad and has the format: [rightTopcorner, rightBotcorner, leftBotcorner, leftTopcorner]
 def CreateFacesFromMesh(n):
     faces = []
     for y in range (0, n - 1):
@@ -98,67 +94,105 @@ def CreateFacesFromMesh(n):
             faces.append([rightTopcorner, rightBotcorner, leftBotcorner, leftTopcorner])
     return faces
 
-def ShowMesh(vertices, n):
+#Displays the mesh on the screen
+#also prints the vertices of the mesh
+def ShowMesh(vertices, n, name):
     faces = CreateFacesFromMesh(n)
-    createMeshFromData("Carlo", (0,0,0), vertices, faces)
-    #print(vertices)
+    createMeshFromData(name, (0,0,0), vertices, faces)
+    print(vertices)
     
+#Given a list of vertices, amount of sqrt(vertices) and amount of subdivisions
+#computes the appropriate DeCasteljau vertices. 
 def DeCasteljau(A, n, s):
+
+    #Returns A if the amount of subdivision is 0
     if s is 0:
-        return []
+        return A
 
-    #Holds the vertices for one column
-    row = []    
-    # Fill column 
-    for index in range(0, n):
-        row.append(A[index])
-
-
+    #Used to compute all the cas values
     stepSize = 0.5/(s+1)
     totalCasValues = int(1/stepSize)
-    CasRow = []
-    
-    print(totalCasValues+1)
-    #for index in range (0, totalCasValues+1):
+
+    casCols = []
+    for i in range(0,n):
         
-    casValue = 0.5
-    #Holds the points for castelJau algorithm on a curve
-    casPoints = []   
-    result = row
-    length = n
-    #Calculates the final point on the curve using casValue
-    while(length != 1):
-        points = []
-        print(length -1)
-        for index in range(0, length-1):
-            casPoints.append(result[index]*(1-casValue) + result[index+1]*(casValue))
-        #result = casPoints
-        length -= 1
-    print(result)
-        #CasRow.append(result)
+        # Fills 1 column
+        column = []
+        for j in range(0, n):
+             column.append(A[i+j*n])
+ 
+        for k in range (0, totalCasValues+1):
+            #Computes all the cas points for a  column  of the surface 
+            casValue = k * stepSize
+
+            #Holds the points for castelJau algorithm on a curve
+            casPoints = []   
+            result = column        
+            length = n
+                                        
+            #Calculates the final point on the curve using casValue
+            while(length != 1):
+                casPoints = []
+                for l in range(0, length-1):
+                    casPoints.append(result[l]*(1-casValue) + result[l+1]*casValue)
+                result = casPoints
+                length -= 1
+            casCols.append(result[0])
 
     
-    
-    return []
+
+    #Using the result from the previous DeCasteljau for the vertical dimension,
+    #DeCasteljau for the horizontal dimension is computed, resulting in 2D computed DeCastelJau.
+    DeCasteljau2D = []
+    for i in range(0, totalCasValues+1):
+       
+       	#Fill 1 row
+       	row = []
+        for j in range(0, n):
+        	row.append(casCols[i+j*(totalCasValues+1)])
+
+   
+        for k in range (0, totalCasValues+1):
+            #Computes all the cas points for a row of the surface  
+            casValue = k * stepSize
+
+            #Holds the points for DeCasteljau algorithm on a curve
+            casPoints = []   
+            result = row
+            length = n
+
+            #Calculates the final point on the curve using casValue
+            while(length != 1):
+                casPoints = []
+                for l in range(0, length-1):
+                    casPoints.append(result[l]*(1-casValue) + result[l+1]*casValue)
+                result = casPoints
+                length -= 1
+            DeCasteljau2D.append(result[0])
+
+    return DeCasteljau2D
     
 def LineIntersect(A, n, p1, p2, e):
     return False
     
 def main(operator, context):
     
-    n = 3
-    length = 4
-    s = 2
-    weight = (1 / 3)
-
+    n = 5
+    length = 10
+    s = 10
+    #DeCasteljau needs different n for faces, which can be computed as follows.
+    nFaceCas = int(1+ 1/(0.5/(s+1)))
+    
     A = ControlMesh(n, length)
     B = DeCasteljau(A, n, s)
-    ShowMesh(A, n)
+
+    ShowMesh(A, n, "display")
+    ShowMesh(B, nFaceCas, "CastelJau")
     
     p1 = (1,2,3)
     p2 = (3,4,5)
 
-    print(LineIntersect(A, n, p1, p2, 0.01))
+    #print(LineIntersect(A, n, p1, p2, 0.01))
 
 # BLENDER UI
 # ----------
