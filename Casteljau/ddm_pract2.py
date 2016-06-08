@@ -18,8 +18,6 @@ bl_info = {
 import bpy
 import random
 import mathutils
-from scipy.spatial import ConvexHull
-
 from bpy.props import *
 
 # DDM PRACTICUM 2
@@ -30,12 +28,9 @@ from bpy.props import *
 
 # Check for outer vertex
 def IsOutervertex(x, y, n):
-    if y == 0 or y == (n - 1) or x == 0 or x == (n - 1):
-        return True
-    return False
+    return y == 0 or y == (n - 1) or x == 0 or x == (n - 1)
 
-
-#Visualize boundaries of 3D Grid
+#Used for visualisation purposes (e.g points as spheres)
 def makeMaterial(name, diffuse, specular, alpha):
     mat = bpy.data.materials.new(name)
     mat.diffuse_color = diffuse
@@ -47,7 +42,14 @@ def setMaterial(ob, mat):
     me = ob.data
     me.materials.append(mat)
 
-# Order vertices first increasing in x, then in y
+#returns a control polygon as a single array which has the following characteristics:
+#• The size is by n × n vertices.
+#• The dimensions of the object in the (x, y)-plane are length × length.
+#• The first vertex in the list is situated at the origin.
+#• The outer vertices must lie exactly on the (x, y)-plane with x ≥ 0 and y ≥ 0.
+#• The vertices are ordered first in increasing x, then in increasing y.
+#• The inner vertices must be raised by a certain height of your choosing.
+#• Returned as an array of vertices, for example [(1.1, 2.1, 6.1), ....]
 def ControlMesh(n, length): 
     vertices = []
     step = length/n
@@ -95,15 +97,19 @@ def CreateFacesFromMesh(n):
             faces.append([rightTopcorner, rightBotcorner, leftBotcorner, leftTopcorner])
     return faces
 
-#Displays the mesh on the screen
-#also prints the vertices of the mesh
+#Takes an array of vertices as described
+#in comments above ControlMesh and creates and displays
+# a mesh of n × n size in the blender viewport with the points from A
+# and prints the list of vertices to the console.
 def ShowMesh(vertices, n, name):
     faces = CreateFacesFromMesh(n)
     createMeshFromData(name, (0,0,0), vertices, faces)
-    #print(vertices)
+    print(vertices)
     
-#Given a list of vertices, amount of sqrt(vertices) and amount of subdivisions
-#computes the appropriate DeCasteljau vertices. 
+#Generates a subdivision surface with s subdivisions from the control mesh A 
+#of size n×n and returns it in the format described in the comments above ControlMesh.
+#The s counts the number of steps between each vertex, therefore when s = 0 the subdivision
+#surface is equal to the control mesh, when s = 1 there is one step in between and so on. 
 def DeCasteljau(A, n, s):
 
     #Returns A if the amount of subdivision is 0
@@ -141,7 +147,6 @@ def DeCasteljau(A, n, s):
             casCols.append(result[0])
 
     
-
     #Using the result from the previous DeCasteljau for the vertical dimension,
     #DeCasteljau for the horizontal dimension is computed, resulting in 2D computed DeCastelJau.
     DeCasteljau2D = []
@@ -199,22 +204,14 @@ def pointInRect_3D(leftBottom, leftTop, rightBottom, rightTop, Point, typeFace):
         j = 0
 
     #Checks whether point is inside the rect using the proper dimensions
-    if(Point[i] >= leftBottom[i] and Point[i] <= rightBottom[i] and Point[j] >= leftBottom[j] and Point[j] <= leftTop[j]):
-        return True
-    else:
-        return False
-    return True
-
+    return Point[i] >= leftBottom[i] and Point[i] <= rightBottom[i] and Point[j] >= leftBottom[j] and Point[j] <= leftTop[j]
 
 #Returns boolean that indicates whether a line intersects a bounding box, given a list of vertices 
 def LineIntersectsBoundingBox(A, p1, p2):
-    #Gets boundary coördinates
-    xList, yList, zList = [], [], []
-
-    for i in range(0, len(A)):
-        xList.append(A[i][0])
-        yList.append(A[i][1])
-        zList.append(A[i][2])
+    #Gets boundary coördinates of AABB
+    xList = [x for (x,y,z) in A]
+    yList = [y for (x,y,z) in A]
+    zList = [z for (x,y,z) in A
 
     xmin = min(xList)
     xmax = max(xList)
@@ -269,22 +266,20 @@ def LineIntersectsBoundingBox(A, p1, p2):
     intersectionBot = mathutils.geometry.intersect_line_plane(line_a, line_b, pointOnBackLeftBotPlane, normalOfBotandTop)
     intersections.append(pointInRect_3D(leftLeftBot, leftRightBot, rightLeftBot, rightRightBot, intersectionBot, "BottomTop"))
 
-
     #Returns true if line intersects AABB, otherwise False
     for i in range(0,len(intersections)):
         if(intersections[i]):
             return True
+
     return False
 
 
-def DeCasteljauSplit(A, n, p1, p2, e):
-
+def DeCasteljauSplit(A, n):
     beginPoints, endPoints = [], []
     casCols = []
     casValue = 0.5
 
     for i in range(0,n):
-        
         # Fills 1 column
         column = []
         for j in range(0, n):
@@ -344,119 +339,93 @@ def DeCasteljauSplit(A, n, p1, p2, e):
         points = beginPoints + list(reversed(endPoints))
         DeCasteljau2D = DeCasteljau2D + points
 
+    return DeCasteljau2D
+    
     
    
-    
-    #Check whether shortest distance from middle point to line is smaller than e, if so returns true
-    #See: http://mathworld.wolfram.com/Point-LineDistance3-Dimensional.html
-    indx = int((len(DeCasteljau2D)-1)/2)
-    point = DeCasteljau2D[indx]
-    p1Vec = mathutils.Vector(p1)
-    p2Vec = mathutils.Vector(p2)
-    shortestDistanceFromThisPointToLine = (((point - p1Vec).cross(point - p2Vec)).magnitude)/((p1Vec - p2Vec).magnitude)
-    if(shortestDistanceFromThisPointToLine < e):
-        return True
-        
 
-    size = 0.05
-    for index, p in enumerate(DeCasteljau2D):
-		#LB
-	    red = makeMaterial('Red',(1,0,0),(1,1,1),1)
-	    origin = p
-	    bpy.ops.mesh.primitive_uv_sphere_add(location=origin)
-	    bpy.ops.transform.resize(value=(size, size, size))
-	    setMaterial(bpy.context.object, red)
-    
-    #Form 4 surfaces, assign all surfaces their portion of the control points
-    #Go in recursion on these
-    splittedLength = int((newN-1)/2+1)
-    leftBotCornerSurfacePoints = []
-    rightBotCornerSurfacePoints = []
-    leftTopCornerSurfacePoints  = []
-    rightTopCornerSurfacePoints = []
-    for y in range (0, splittedLength):
-        for x in range (0, splittedLength):
-            leftBotCornerSurfacePoints.append(DeCasteljau2D[x+ y*newN])
-            rightBotCornerSurfacePoints.append(DeCasteljau2D[splittedLength -1 + x + y*newN])
-            leftTopCornerSurfacePoints.append(DeCasteljau2D[newN*2 + x + (y+(n-3))*newN])
-            rightTopCornerSurfacePoints.append(DeCasteljau2D[newN*2 + splittedLength -1 + x + (y+(n-3))*newN])
-            
- 
-    '''
-    LineIntersect(leftBotCornerSurfacePoints, splittedLength, p1, p2, e)
-    LineIntersect(rightBotCornerSurfacePoints, splittedLength, p1, p2, e)
-    LineIntersect(leftTopCornerSurfacePoints,  splittedLength , p1, p2, e)
-    LineIntersect(rightTopCornerSurfacePoints,  splittedLength, p1, p2, e)
-    ''' 
-   	
-    size = 0.2
-    for index in range(splittedLength*splittedLength):
-    	#LB
-        green = makeMaterial('Green',(0,1,0),(1,1,1),1)
-        origin = leftBotCornerSurfacePoints[index]
-        bpy.ops.mesh.primitive_uv_sphere_add(location=origin)
-        bpy.ops.transform.resize(value=(size, size, size))
-        setMaterial(bpy.context.object, green)
-        
-        #RB
-        blue = makeMaterial('blue',(0,0,1),(1,1,1),1)
-        origin = rightBotCornerSurfacePoints[index]
-        bpy.ops.mesh.primitive_uv_sphere_add(location=origin)
-        bpy.ops.transform.resize(value=(size, size, size))
-        setMaterial(bpy.context.object, blue)
-
-        
-        #LT
-        purple = makeMaterial('purple',(0.7,0,1),(1,1,1),1)
-        origin = leftTopCornerSurfacePoints[index]
-        bpy.ops.mesh.primitive_uv_sphere_add(location=origin)
-        bpy.ops.transform.resize(value=(size, size, size))
-        setMaterial(bpy.context.object, purple)
-
-        #RT
-        red = makeMaterial('red',(1,0,0),(1,1,1),1)
-        origin = rightTopCornerSurfacePoints[index]
-        bpy.ops.mesh.primitive_uv_sphere_add(location=origin)
-        bpy.ops.transform.resize(value=(size, size, size))
-        setMaterial(bpy.context.object, red)
-    	
-     
-	
-    
-    
 #Assume inputted array is filled with Vectors
-def LineIntersect(A, n, p1, p2, e):
+def LineIntersect(A, n, p1, p2, e): 
+    #If line intersects bounding box of surface
+    if LineIntersectsBoundingBox(A, p1, p2):
 
-    #Compute bounding box of surface
-    if not(LineIntersectsBoundingBox(A, p1, p2)):
-        return False
+        DeCasteljauSplit2D = DeCasteljauSplit(A, n)
+
+        #Check whether the shortest distance from a surface point to the line is smaller than e, if so returns true
+        #See: http://mathworld.wolfram.com/Point-LineDistance3-Dimensional.html
+        indx = int((len(DeCasteljauSplit2D)-1)/2)
+        point = DeCasteljauSplit2D[indx]
+        p1Vec = mathutils.Vector(p1)
+        p2Vec = mathutils.Vector(p2)
+        newN = 2*n - 1
+        #Sentinel value
+        shortestDistance = 10000
+        for index, point in enumerate(DeCasteljauSplit2D):
+            shortestDistanceFromThisPointToLine = (((point - p1Vec).cross(point - p2Vec)).magnitude)/((p1Vec - p2Vec).magnitude)
+            if(shortestDistanceFromThisPointToLine < shortestDistance):
+                shortestDistance = shortestDistanceFromThisPointToLine
+           
+        if(shortestDistance < e):
+            return True
+        else:
+            #If distance is not smaller than e, form 4 surfaces, assign all surfaces their portion of the control points
+            #Go in recursion on these
+            leftBotCornerSurfacePoints = []
+            rightBotCornerSurfacePoints = []
+            leftTopCornerSurfacePoints  = []
+            rightTopCornerSurfacePoints = []
+            for y in range (0, n):
+                for x in range (0, n):
+                    leftBotCornerSurfacePoints.append(DeCasteljauSplit2D[x+ y*newN])
+                    rightBotCornerSurfacePoints.append(DeCasteljauSplit2D[n -1 + x + y*newN])
+                    leftTopCornerSurfacePoints.append(DeCasteljauSplit2D[newN*2 + x + (y+(n-3))*newN])
+                    rightTopCornerSurfacePoints.append(DeCasteljauSplit2D[newN*2 + n -1 + x + (y+(n-3))*newN])
+                   
+            #If any of the 4 new surfaces returns true, return true, otherwise false
+            return  LineIntersect(leftBotCornerSurfacePoints,  n, p1, p2, e)   or \
+                    LineIntersect(rightBotCornerSurfacePoints, n, p1, p2, e)  or \
+                    LineIntersect(leftTopCornerSurfacePoints,  n, p1, p2, e) or \
+                    LineIntersect(rightTopCornerSurfacePoints, n, p1, p2, e) 
+
     else:
-        return DeCasteljauSplit(A, n, p1, p2, e)
+        return False
+
             
-        
-
-
-          
-
-
-    
 def main(operator, context):
     
-    n = 5
+    #Startup variables
+    n = 3
     length = 10
     s = 10
+
     #DeCasteljau needs different n for faces, which can be computed as follows.
     nFaceCas = int(1+ 1/(0.5/(s+1)))
     
+    #Step 1: Control Polygon
     A = ControlMesh(n, length)
-    B = DeCasteljau(A, n, s)
 
-    ShowMesh(A, n, "display")
+    xmin = min([x for (x,y,z) in A])
+    xList2 = []
+
+    for i in range(0, len(A)):
+        xList2.append(A[i][0])
+
+
+    print(xmin == min(xList2))
+
+    #Step 3:  Surface Approximation
+    #B = DeCasteljau(A, n, s)
+
+    #Step 2: Mesh Display of Control Polygon and CastelJau
+    #ShowMesh(A, n, "display")
     #ShowMesh(B, nFaceCas, "CastelJau")
-    p1 = (3,4,3)
-    p2 = (3,4,7)
 
-    print(LineIntersect(A, n, p1, p2, 0.01))
+    #Step 4: Intersection Test
+    #p1 = (2,1,3)
+    #p2 = (4,3,1)
+    
+    #print("\n Line defined by points p1: "+ str(p1) + ", p2: " + str(p2) \
+    #   + "INTERSECTION:" + str(LineIntersect(A, n, p1, p2, 0.01)))
 
 # BLENDER UI
 # ----------
