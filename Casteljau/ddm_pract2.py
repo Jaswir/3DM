@@ -7,7 +7,7 @@ bl_info = {
     "version": (1, 0),
     "blender": (2, 77, 0),
     "location": "View3D > Add > Mesh",
-    "warning": "", # used for warning icon and text in addons panel
+    "warning": "", # used for warning icon and text in addons plane-line
     "wiki_url": "http://www.cs.uu.nl/docs/vakken/ddm/"
                 "",
     "tracker_url": "",
@@ -211,7 +211,7 @@ def LineIntersectsBoundingBox(A, p1, p2):
     #Gets boundary coördinates of AABB
     xList = [x for (x,y,z) in A]
     yList = [y for (x,y,z) in A]
-    zList = [z for (x,y,z) in A
+    zList = [z for (x,y,z) in A]
 
     xmin = min(xList)
     xmax = max(xList)
@@ -394,9 +394,9 @@ def LineIntersect(A, n, p1, p2, e):
 def main(operator, context):
     
     #Startup variables
-    n = 3
+    n = 4
     length = 10
-    s = 10
+    s = 2
 
     #DeCasteljau needs different n for faces, which can be computed as follows.
     nFaceCas = int(1+ 1/(0.5/(s+1)))
@@ -404,28 +404,20 @@ def main(operator, context):
     #Step 1: Control Polygon
     A = ControlMesh(n, length)
 
-    xmin = min([x for (x,y,z) in A])
-    xList2 = []
-
-    for i in range(0, len(A)):
-        xList2.append(A[i][0])
-
-
-    print(xmin == min(xList2))
 
     #Step 3:  Surface Approximation
-    #B = DeCasteljau(A, n, s)
+    B = DeCasteljau(A, n, s)
 
     #Step 2: Mesh Display of Control Polygon and CastelJau
-    #ShowMesh(A, n, "display")
-    #ShowMesh(B, nFaceCas, "CastelJau")
+    ShowMesh(A, n, "display")
+    ShowMesh(B, nFaceCas, "CastelJau")
 
     #Step 4: Intersection Test
-    #p1 = (2,1,3)
-    #p2 = (4,3,1)
+    p1 = (2,1,5)
+    p2 = (4,3,5)
     
-    #print("\n Line defined by points p1: "+ str(p1) + ", p2: " + str(p2) \
-    #   + "INTERSECTION:" + str(LineIntersect(A, n, p1, p2, 0.01)))
+    print("\n Line defined by points p1: "+ str(p1) + ", p2: " + str(p2) \
+      + "INTERSECTION:" + str(LineIntersect(A, n, p1, p2, 0.01)))
 
 # BLENDER UI
 # ----------
