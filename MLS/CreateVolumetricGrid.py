@@ -176,7 +176,7 @@ def main(context):
                  A = np.empty((0,matchingLengthofDegreeK(polyDegree)))
                  for index, sqrtTi in enumerate(sqrtTiValues):
                      #Here we choose B for a degree 0, 1 or 2. EXPERIMENTABLE PARAMETER
-                     bT = ChooseB(polyDegree, P)
+                     bT = ChooseB(polyDegree, PointsPi[index])
                      value = sqrtTi*bT
                      A = np.insert(A, index, value, 0)
 
@@ -211,7 +211,7 @@ def main(context):
     vertices, triangles = mcubes.marching_cubes_func((lowerLeft[0], lowerLeft[1], lowerLeft[2]),(upperRight[0], upperRight[1], upperRight[2]), 100, 100, 100, f, 0)
 
     # Export the result
-    mcubes.export_mesh(vertices, triangles, "C:\\Users\\jaswir\\Documents\\GameTechnology\\3DM\\3DM_Practical1\\DAE_Files\\Bunnyk0.dae", "Bunny_k0")
+    mcubes.export_mesh(vertices, triangles, "C:\\Users\\jaswir\\Documents\\GameTechnology\\3DM\\3DM_Practical1\\DAE_Files\\Bunnyk1.dae", "Bunny_k1")
 
 
 class CreateVolumetricGrid(bpy.types.Operator):

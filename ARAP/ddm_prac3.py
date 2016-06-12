@@ -4,6 +4,8 @@
 # exec(compile(open(filename).read(), filename, 'exec'), globals(), locals())
 
 import bpy
+import bmesh
+import numpy as np
 
 
 
@@ -11,9 +13,47 @@ import bpy
 # Runs the precalculation process, storing the precomputation data with the object that is being deformed
 def Precompute(source_object):
 
-	# TODO: remove this code and implement
-	source_object.data['precomputed_data'] = Matrix()
-	print(source_object.data['precomputed_data'])
+	# Get a BMesh representation
+	bm = bmesh.new()              # create an empty BMesh
+	bm.from_mesh(source_object.data)   # fill it in from a Mesh
+
+	#Questions: 
+	#-1 Deformed and original mesh??
+	#-2 SVD - fullmatrices option
+
+	'''NOTES
+	If you use the indices, you probably don't have to take account of the changing positions as you can call the smae indices.
+	'''
+	
+	#Computes Local Step 
+
+	for vertex in bm.verts:
+		#Composes Matrices P and Q 
+		one_ringNeighbours = []
+		for edge in vertex.link_edges:
+			neighbour = edge.other_vert(vertex)
+			one_ringNeighbours.append(vertex.co - neighbour.co)
+		one_ringNeighbours = np.array(one_ringNeighbours)
+
+		
+		pT = np.transpose(one_ringNeighbours)
+		
+		Q = ? 
+
+		#Compose correlation matrix S3×3 = P^T Q.
+		S3x3 = np.dot(pT, Q)  
+
+		#Decompose S = UΣvT using singular value decomposition, 
+		#and composes the closest rigid transformation Rv = UvT
+		U, s, v = np.linalg.svd(S3x3)
+		vT = np.transpose(v)
+		Rv = np.dot(U, vT)
+
+		detRv = np.linalg.det(Rv)
+		if(detRv == -1):
+			
+
+
 
 
 # Runs As Rigid As Possible deformation on the mesh M, using a list of handles given by H. A handle is a list of vertices tupled with a transform matrix which might be rigid (identity)
@@ -27,15 +67,14 @@ def ARAP(source_mesh, deformed_mesh, H):
 
 def main():
 	# TODO: Check for an existing deformed mesh, if so use that as an iteration, if not use a mesh named 'source' as the initial mesh.
-	source = bpy.data.objects['source']
+	source = bpy.context.active_object
 	
 	# TODO: Precompute A'^T * A if the data is dirty or does not exist, and store it with the source object
-	Precompute(source_object)
+	Precompute(source)
 	
 	# TODO: Perform As Rigid As Possible deformation on the source object in the first iteration, and on a deformed object if it exists
-	ARAP(source.data, get_deformed_object(source).data, get_handles(source))
-	
-	
+	#ARAP(source.data, get_deformed_object(source).data, get_handles(source))
+	#get_handles(source)    
 	
 	
 # BLENDER
@@ -123,7 +162,7 @@ def get_handles(source):
 			
 			# Find the extends of the aligned bounding box
 			bounding_box_transform = get_transform_of_object(handle_name)
-			
+			print(bounding_box_transform)
 			# Interpret the transform as a bounding box for selecting the handles
 			handle_vertices = get_handle_vertices(source.data.vertices, bounding_box_transform, mesh_transform)
 			
