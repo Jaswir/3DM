@@ -36,21 +36,36 @@ def Precompute(source_object):
 		one_ringNeighbours = np.array(one_ringNeighbours)
 
 		
-		pT = np.transpose(one_ringNeighbours)
-		
-		Q = ? 
+		p = one_ringNeighbours
+		pT = np.transpose(p)
+		Q = p
 
 		#Compose correlation matrix S3×3 = P^T Q.
 		S3x3 = np.dot(pT, Q)  
 
+
 		#Decompose S = UΣvT using singular value decomposition, 
 		#and composes the closest rigid transformation Rv = UvT
-		U, s, v = np.linalg.svd(S3x3)
+		U, sigma, v = np.linalg.svd(S3x3)
 		vT = np.transpose(v)
 		Rv = np.dot(U, vT)
 
+
+		#If det(Rv) = −1 (determinant), leading to reflection, instead compute Rv = UΣvT
+		# where Σ'is an identity matrix, save for Σ'ii = -1 , where i is the index of 
+		#the smallest diagonal (singular) value in the original Σ. . 
+		#(flipping sign). For instance, if i = 3, you should use Σ' = diag[1, 1, −1].
 		detRv = np.linalg.det(Rv)
-		if(detRv == -1):
+		if(detRv == 1):
+			#Find the index of the smallest diagonal vlaue in the original Σ.
+			i =  np.argmin(sigma)
+			#Computes Σ'
+			s = [1,1,1]
+			s[i] = -1
+			sigmaTag = np.array([s[0],0,0], [0,s[1],0], [0,0,s[2]])
+
+			
+
 			
 
 
