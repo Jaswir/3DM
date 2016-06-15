@@ -4,92 +4,141 @@
 # exec(compile(open(filename).read(), filename, 'exec'), globals(), locals())
 
 import bpy
+import math
 import bmesh
 import numpy as np
-
-
+import scipy
+from mathutils import *
 
 
 # Runs the precalculation process, storing the precomputation data with the object that is being deformed
 def Precompute(source_object):
 
+
+
+
 	# Get a BMesh representation
 	bm = bmesh.new()              # create an empty BMesh
 	bm.from_mesh(source_object.data)   # fill it in from a Mesh
 
-	#Questions: 
-	#-1 Deformed and original mesh??
-	#-2 SVD - fullmatrices option
 
-	'''NOTES
-	If you use the indices, you probably don't have to take account of the changing positions as you can call the smae indices.
-	'''
-	
-	#Computes Local Step 
+	#Turn A into A' by removing constraint(CONST) columns.
+	#Instead of removing constraint columns, we omit adding these columns to A altogether.
 
+	#Get const column indices
+	CONST = get_handles(source_object)[0][0]
+
+
+	#The A' matrix 
+	APrime = []
+	idx = 0
+	CONSTidx = 0;
 	for vertex in bm.verts:
-		#Composes Matrices P and Q 
-		one_ringNeighbours = []
-		for edge in vertex.link_edges:
-			neighbour = edge.other_vert(vertex)
-			one_ringNeighbours.append(vertex.co - neighbour.co)
-		one_ringNeighbours = np.array(one_ringNeighbours)
 
+
+		validColumn = idx != CONST[CONSTidx]
 		
-		p = one_ringNeighbours
-		pT = np.transpose(p)
-		Q = p
-
-		#Compose correlation matrix S3×3 = P^T Q.
-		S3x3 = np.dot(pT, Q)  
-
-
-		#Decompose S = UΣvT using singular value decomposition, 
-		#and composes the closest rigid transformation Rv = UvT
-		U, sigma, v = np.linalg.svd(S3x3)
-		vT = np.transpose(v)
-		Rv = np.dot(U, vT)
+		#Check whether current vertex idx is a CONST index.
+		#Every time this is false we add the column to APrime
+		if(idx != ):
+			#Holds weights for 1 one-ring
+			column = []
+			#Get oneRing neighbours of vertex
+			one_ringNeighbours = [edge.other_vert(vertex) for edge in vertex.link_edges]
 
 
-		#If det(Rv) = −1 (determinant), leading to reflection, instead compute Rv = UΣvT
-		# where Σ'is an identity matrix, save for Σ'ii = -1 , where i is the index of 
-		#the smallest diagonal (singular) value in the original Σ. . 
-		#(flipping sign). For instance, if i = 3, you should use Σ' = diag[1, 1, −1].
-		detRv = np.linalg.det(Rv)
-		if(detRv == 1):
-			#Find the index of the smallest diagonal vlaue in the original Σ.
-			i =  np.argmin(sigma)
-			#Computes Σ'
-			s = [1,1,1]
-			s[i] = -1
-			sigmaTag = np.array([s[0],0,0], [0,s[1],0], [0,0,s[2]])
+			for neighbour in one_ringNeighbours:
+				#Get oneRing neighbours of neighbours
+				neighboursNeighbours = [edge.other_vert(neighbour) for edge in neighbour.link_edges]
+				#Find matching neighbours
+				matchingNeighbours =  list(set(one_ringNeighbours) & set(neighboursNeighbours))
 
-			
+				#Use these to compute weights, see https://in.answers.yahoo.com/question/index?qid=20110530115210AA2eAW1
+				aAlpha = neighbour.co - matchingNeighbours[0].co
+				aBeta  = neighbour.co - matchingNeighbours[1].co
+				bAlpha = vertex.co - matchingNeighbours[0].co
+				bBeta  = vertex.co - matchingNeighbours[1].co
 
-			
+				'''MIGHT NEED TO BE ADAPTED IN THE FUTURE IF THINGS LOOK WRONG'''
+				tanAlpha = ((aAlpha.cross(bAlpha)).magnitude) / (aAlpha.dot(bAlpha))
+				tanBeta = ((aBeta.cross(bBeta)).magnitude) / (aBeta.dot(bBeta))
+				cotAlpha = 1/tanAlpha
+				cotBeta = 1/tanBeta
+
+				Wiv = 0.5*(cotAlpha + cotBeta)
+				#AMIR: Some people asked what to do with negative cotangent weight, 
+				#because they commonly take sqrt(w_ij) to put into the ||Ax-b||^2 expression. 
+				#The weights should not overly negative in reasonable triangles, 
+				#so try and use w_{ij}={small positive epsilon} as a cheap workaround. For instance w_{ij}=10e-3.
+				if (Wiv < 0):
+					Wiv = 10e-3
+
+				column.append(Wiv)
+
+			column = np.array(column)
+			column = np.sqrt(column)
+
+			APrime.append(column)
+
+		#Otherwise we update the CONSTidx,
+		#so it will grab the next index in the following iteration
+		#when the last index of CONSTidx has been reached
+		#all constraint columns are taken account of
+		else:
+			CONSTidx ++
+
+		#Prepare idx for the iteration
+		idx ++
+
+	APrime = np.transpose(np.array(APrime))
 
 
+
+
+
+
+
+
+
+	
+	#source_object.data['precomputed_data']  = Matrix()
 
 
 # Runs As Rigid As Possible deformation on the mesh M, using a list of handles given by H. A handle is a list of vertices tupled with a transform matrix which might be rigid (identity)
-def ARAP(source_mesh, deformed_mesh, H):
-
-	# TODO: remove this code and implement
-	print(source_mesh.vertices)
-	print(deformed_mesh.vertices)
-	print(H)
-	return source_mesh
+#def ARAP(source_mesh, deformed_mesh, H):
+	
 
 def main():
+
+	'''
+	A = []
+	a = np.array([1,2,3])
+	b = np.array([4,5,6])
+	c = np.array([7,8,9])
+
+	A.append(a)
+	A.append(b)
+	A.append(c)
+
+	A = np.array(A)
+	print(A)
+	print("\n")
+
+
+	A = scipy.delete(A , 1  ,1)
+	print(A)
+	'''
+
 	# TODO: Check for an existing deformed mesh, if so use that as an iteration, if not use a mesh named 'source' as the initial mesh.
-	source = bpy.context.active_object
+	source = bpy.data.objects['source']
 	
 	# TODO: Precompute A'^T * A if the data is dirty or does not exist, and store it with the source object
 	Precompute(source)
 	
 	# TODO: Perform As Rigid As Possible deformation on the source object in the first iteration, and on a deformed object if it exists
 	#ARAP(source.data, get_deformed_object(source).data, get_handles(source))
-	#get_handles(source)    
+
+
 	
 	
 # BLENDER
@@ -103,9 +152,11 @@ def get_mesh_vertices(name):
 	
 # Finds the relative transform from matrix M to T
 def get_relative_transform(M, T):
+	
 	Minv = M.copy()
 	Minv.invert()
-	return Minv * T
+		
+	return T * Minv
 
 # Returns an object that can be used to store the deformed mesh
 def get_deformed_object(source):
@@ -177,7 +228,7 @@ def get_handles(source):
 			
 			# Find the extends of the aligned bounding box
 			bounding_box_transform = get_transform_of_object(handle_name)
-			print(bounding_box_transform)
+			
 			# Interpret the transform as a bounding box for selecting the handles
 			handle_vertices = get_handle_vertices(source.data.vertices, bounding_box_transform, mesh_transform)
 			
@@ -192,7 +243,9 @@ def get_handles(source):
 			else:
 			
 				# It is a rigid handle
-				result.append( (handle_vertices, Matrix([1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]) ) )
+				m = Matrix()
+				m.identity()
+				result.append( (handle_vertices, m) )
 			
 	return result
 	
