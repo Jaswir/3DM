@@ -9,13 +9,11 @@ import bmesh
 import numpy as np
 import scipy
 from mathutils import *
+from scipy.sparse import csr_matrix
 
 
 # Runs the precalculation process, storing the precomputation data with the object that is being deformed
 def Precompute(source_object):
-
-
-
 
 	# Get a BMesh representation
 	bm = bmesh.new()              # create an empty BMesh
@@ -25,41 +23,47 @@ def Precompute(source_object):
 	#Turn A into A' by removing constraint(CONST) columns.
 	#Instead of removing constraint columns, we omit adding these columns to A altogether.
 
-	#Get const column indices
+	#Get const columns' indices
 	CONST = get_handles(source_object)[0][0]
+	
+	
+
+	#Gets the total amount of x's in x', this must be equal to the size of a row in A'
+	#(After removing constraint column).
+	amountOfcolumns = 0
+	for index, vertex in enumerate(bm.verts):
+			one_ringNeighbours = [edge.other_vert(vertex) for edge in vertex.link_edges]
+			amountOfcolumns += 1 + len(one_ringNeighbours)
 
 
-	#The A' matrix 
-	APrime = []
-	idx = 0
-	CONSTidx = 0;
-	for vertex in bm.verts:
+	amountOfrows = amountOfcolumns - len(bm.verts)
+	amountOfcolumns -= len(CONST)
+	#Used to determine the indices in which sqrt(weights) should be inserted into their respective row.
+	offsetIdx = 0;
 
+	#Used to count which row we are currently working at
+	rowCount = 0
 
-		validColumn = idx != CONST[CONSTidx]
-		
-		#Check whether current vertex idx is a CONST index.
-		#Every time this is false we add the column to APrime
-		if(idx != ):
-			#Holds weights for 1 one-ring
-			column = []
+	APrime = np.zeros((amountOfrows,amountOfcolumns))
+
+	for index, vertex in enumerate(bm.verts):
+			
 			#Get oneRing neighbours of vertex
 			one_ringNeighbours = [edge.other_vert(vertex) for edge in vertex.link_edges]
 
+			for increment, neighbour in enumerate(one_ringNeighbours):
 
-			for neighbour in one_ringNeighbours:
-				#Get oneRing neighbours of neighbours
+				#Get oneRing neighbours of neighbour
 				neighboursNeighbours = [edge.other_vert(neighbour) for edge in neighbour.link_edges]
 				#Find matching neighbours
 				matchingNeighbours =  list(set(one_ringNeighbours) & set(neighboursNeighbours))
-
+		
 				#Use these to compute weights, see https://in.answers.yahoo.com/question/index?qid=20110530115210AA2eAW1
 				aAlpha = neighbour.co - matchingNeighbours[0].co
 				aBeta  = neighbour.co - matchingNeighbours[1].co
 				bAlpha = vertex.co - matchingNeighbours[0].co
 				bBeta  = vertex.co - matchingNeighbours[1].co
 
-				'''MIGHT NEED TO BE ADAPTED IN THE FUTURE IF THINGS LOOK WRONG'''
 				tanAlpha = ((aAlpha.cross(bAlpha)).magnitude) / (aAlpha.dot(bAlpha))
 				tanBeta = ((aBeta.cross(bBeta)).magnitude) / (aBeta.dot(bBeta))
 				cotAlpha = 1/tanAlpha
@@ -73,61 +77,92 @@ def Precompute(source_object):
 				if (Wiv < 0):
 					Wiv = 10e-3
 
-				column.append(Wiv)
+				Wiv = math.sqrt(Wiv)
 
-			column = np.array(column)
-			column = np.sqrt(column)
+				#Handles dealing with constraint columns
+				#by changing row[offsetIdx] to Wiv if the vertex doesn't belong to a constraint column
+				if(not(index in CONST)):
+						#Sets up row for this particular neighbour of Vertex<index> 
+						APrime[rowCount][offsetIdx] = Wiv
 
-			APrime.append(column)
+				#Otherwise decrement offsetIdx
+				else:
+					offsetIdx -=1
 
-		#Otherwise we update the CONSTidx,
-		#so it will grab the next index in the following iteration
-		#when the last index of CONSTidx has been reached
-		#all constraint columns are taken account of
-		else:
-			CONSTidx ++
+				APrime[rowCount][offsetIdx + (increment + 1)] = -Wiv
+				rowCount += 1
+				
+			#Adapt next vertex's starting position in the row
+			offsetIdx += len(one_ringNeighbours) + 1
 
-		#Prepare idx for the iteration
-		idx ++
+	
 
-	APrime = np.transpose(np.array(APrime))
-
-
-
-
-
-
-
+	APrime = np.matrix(APrime)
+	APrimeTAPrime = APrime.T * APrime
+	L = np.linalg.cholesky(APrimeTAPrime)
+	print("Success")
 
 
 	
-	#source_object.data['precomputed_data']  = Matrix()
+	
+	
 
 
 # Runs As Rigid As Possible deformation on the mesh M, using a list of handles given by H. A handle is a list of vertices tupled with a transform matrix which might be rigid (identity)
-#def ARAP(source_mesh, deformed_mesh, H):
+def ARAP(source_mesh, deformed_mesh, H):
+	 # Get a BMesh representation
+	bm = bmesh.new()              # create an empty BMesh
+	bm.from_mesh(source_mesh)   # fill it in from a Mesh
+
+
+	#Computes Local Step 
+	Rvs = []
+	for vertex in bm.verts:
+		#Composes Matrices P and Q 
+		one_ringNeighbours = []
+		for edge in vertex.link_edges:
+			neighbour = edge.other_vert(vertex)
+			one_ringNeighbours.append(vertex.co - neighbour.co)
+		one_ringNeighbours = np.array(one_ringNeighbours)
+
+		
+		p = one_ringNeighbours
+		pT = np.transpose(p)
+		Q = p
+
+		#Compose correlation matrix S3×3 = P^T Q.
+		S3x3 = np.dot(pT, Q)  
+
+
+		#Decompose S = UΣvT using singular value decomposition, 
+		#and composes the closest rigid transformation Rv = UvT
+		U, sigma, v = np.linalg.svd(S3x3)
+		vT = np.transpose(v)
+		Rv = np.dot(U, vT)
+
+
+		#If det(Rv) = −1 (determinant), leading to reflection, instead compute Rv = UΣvT
+		# where Σ'is an identity matrix, save for Σ'ii = -1 , where i is the index of 
+		#the smallest diagonal (singular) value in the original Σ. . 
+		#(flipping sign). For instance, if i = 3, you should use Σ' = diag[1, 1, −1].
+		detRv = np.linalg.det(Rv)
+		if(detRv == -1):
+			#Find the index of the smallest diagonal vlaue in the original Σ.
+			i =  np.argmin(sigma)
+			#Computes Σ'
+			s = [1,1,1]
+			s[i] = -1
+			sigmaTag = np.array([[s[0],0,0], [0,s[1],0], [0,0,s[2]]])
+			#Computes reflection resistant  Rv
+			Rv = np.dot(np.dot(U, sigmaTag), vT)
+		print(Rv)
+
+		Rvs.append(Rv)
+   
 	
 
 def main():
 
-	'''
-	A = []
-	a = np.array([1,2,3])
-	b = np.array([4,5,6])
-	c = np.array([7,8,9])
-
-	A.append(a)
-	A.append(b)
-	A.append(c)
-
-	A = np.array(A)
-	print(A)
-	print("\n")
-
-
-	A = scipy.delete(A , 1  ,1)
-	print(A)
-	'''
 
 	# TODO: Check for an existing deformed mesh, if so use that as an iteration, if not use a mesh named 'source' as the initial mesh.
 	source = bpy.data.objects['source']
