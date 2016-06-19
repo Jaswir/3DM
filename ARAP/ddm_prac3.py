@@ -9,111 +9,112 @@ import bmesh
 import numpy as np
 import scipy
 from mathutils import *
+import mathutils
 from scipy.sparse import csr_matrix
-
 
 # Runs the precalculation process, storing the precomputation data with the object that is being deformed
 def Precompute(source_object):
-
+	
 	# Get a BMesh representation
 	bm = bmesh.new()              # create an empty BMesh
 	bm.from_mesh(source_object.data)   # fill it in from a Mesh
 
 
-	#Turn A into A' by removing constraint(CONST) columns.
-	#Instead of removing constraint columns, we omit adding these columns to A altogether.
 
 	#Get const columns' indices
 	CONST = get_handles(source_object)[0][0]
 	
-	
+	amountOfcolumns = len(bm.verts)
 
-	#Gets the total amount of x's in x', this must be equal to the size of a row in A'
-	#(After removing constraint column).
-	amountOfcolumns = 0
+	#Use KD-Tree to link vertices to indices in bm.verts
+	size = len(bm.verts)
+	verticesKD_Tree = mathutils.kdtree.KDTree(size)
+	for i, v in enumerate(bm.verts):
+		verticesKD_Tree.insert(v.co, i)
+
+	verticesKD_Tree.balance()
+
+	#Make new list, because bm.verts was being a bitch.
+	vertices  = [vert.co for vert in bm.verts]
+	
+	#Finds the total amount of rows
+	amountOfRows = 0
 	for index, vertex in enumerate(bm.verts):
 			one_ringNeighbours = [edge.other_vert(vertex) for edge in vertex.link_edges]
-			amountOfcolumns += 1 + len(one_ringNeighbours)
+			amountOfRows += 1 + len(one_ringNeighbours)
 
-
-	amountOfrows = amountOfcolumns - len(bm.verts)
-	amountOfcolumns -= len(CONST)
-	#Used to determine the indices in which sqrt(weights) should be inserted into their respective row.
-	offsetIdx = 0;
+	#Stores A
+	A = np.zeros((amountOfRows, amountOfcolumns))
 
 	#Used to count which row we are currently working at
 	rowCount = 0
 
-	APrime = np.zeros((amountOfrows,amountOfcolumns))
-
 	for index, vertex in enumerate(bm.verts):
-			
-			#Get oneRing neighbours of vertex
-			one_ringNeighbours = [edge.other_vert(vertex) for edge in vertex.link_edges]
 
-			for increment, neighbour in enumerate(one_ringNeighbours):
+		#Get oneRing neighbours of vertex
+		one_ringNeighbours = [edge.other_vert(vertex) for edge in vertex.link_edges]
 
-				#Get oneRing neighbours of neighbour
-				neighboursNeighbours = [edge.other_vert(neighbour) for edge in neighbour.link_edges]
-				#Find matching neighbours
-				matchingNeighbours =  list(set(one_ringNeighbours) & set(neighboursNeighbours))
-		
-				#Use these to compute weights, see https://in.answers.yahoo.com/question/index?qid=20110530115210AA2eAW1
-				aAlpha = neighbour.co - matchingNeighbours[0].co
-				aBeta  = neighbour.co - matchingNeighbours[1].co
-				bAlpha = vertex.co - matchingNeighbours[0].co
-				bBeta  = vertex.co - matchingNeighbours[1].co
+		for neighbour in one_ringNeighbours:
 
-				tanAlpha = ((aAlpha.cross(bAlpha)).magnitude) / (aAlpha.dot(bAlpha))
-				tanBeta = ((aBeta.cross(bBeta)).magnitude) / (aBeta.dot(bBeta))
-				cotAlpha = 1/tanAlpha
-				cotBeta = 1/tanBeta
-
-				Wiv = 0.5*(cotAlpha + cotBeta)
-				#AMIR: Some people asked what to do with negative cotangent weight, 
-				#because they commonly take sqrt(w_ij) to put into the ||Ax-b||^2 expression. 
-				#The weights should not overly negative in reasonable triangles, 
-				#so try and use w_{ij}={small positive epsilon} as a cheap workaround. For instance w_{ij}=10e-3.
-				if (Wiv < 0):
-					Wiv = 10e-3
-
-				Wiv = math.sqrt(Wiv)
-
-				#Handles dealing with constraint columns
-				#by changing row[offsetIdx] to Wiv if the vertex doesn't belong to a constraint column
-				if(not(index in CONST)):
-						#Sets up row for this particular neighbour of Vertex<index> 
-						APrime[rowCount][offsetIdx] = Wiv
-
-				#Otherwise decrement offsetIdx
-				else:
-					offsetIdx -=1
-
-				APrime[rowCount][offsetIdx + (increment + 1)] = -Wiv
-				rowCount += 1
-				
-			#Adapt next vertex's starting position in the row
-			offsetIdx += len(one_ringNeighbours) + 1
-
+			#Get oneRing neighbours of neighbour
+			neighboursNeighbours = [edge.other_vert(neighbour) for edge in neighbour.link_edges]
+			#Find matching neighbours
+			matchingNeighbours =  list(set(one_ringNeighbours) & set(neighboursNeighbours))
 	
+			#Use these to compute weights, see https://in.answers.yahoo.com/question/index?qid=20110530115210AA2eAW1
+			aAlpha = neighbour.co - matchingNeighbours[0].co
+			aBeta  = neighbour.co - matchingNeighbours[1].co
+			bAlpha = vertex.co - matchingNeighbours[0].co
+			bBeta  = vertex.co - matchingNeighbours[1].co
 
+			tanAlpha = ((aAlpha.cross(bAlpha)).magnitude) / (aAlpha.dot(bAlpha))
+			tanBeta  = ((aBeta.cross(bBeta)).magnitude) / (aBeta.dot(bBeta))
+			cotAlpha = 1/tanAlpha
+			cotBeta  = 1/tanBeta 
+
+			Wiv = 0.5*(cotAlpha + cotBeta)
+			#AMIR: Some people asked what to do with negative cotangent weight, 
+			#because they commonly take sqrt(w_ij) to put into the ||Ax-b||^2 expression. 
+			#The weights should not overly negative in reasonable triangles, 
+			#so try and use w_{ij}={small positive epsilon} as a cheap workaround. For instance w_{ij}=10e-3.
+			if (Wiv < 0):
+				Wiv = 10e-3
+
+			Wiv = math.sqrt(Wiv)
+
+			#Fills A
+			vertexIdx    = verticesKD_Tree.find(vertex.co)[1]
+			neighbourIdx = verticesKD_Tree.find(neighbour.co)[1]
+			A[rowCount][vertexIdx]    = Wiv
+			A[rowCount][neighbourIdx] = -Wiv
+
+			#update row
+			rowCount += 1
+			
+	#Stores oldA, for computing b'		
+	oldA = A
+	#Acquires A', by removing constraint columns from A.
+	for columnIdx in reversed(CONST):
+		A = np.delete(A,columnIdx,1)
+	APrime = A
+
+	#Computes A'TA' and prefactors the matrix
 	APrime = np.matrix(APrime)
 	APrimeTAPrime = APrime.T * APrime
 	L = np.linalg.cholesky(APrimeTAPrime)
-	print("Success")
 
-
+	# Saves things which will be used in further steps of the computation in dictionary
+	source_object.data['precomputed_data'] = np.array(L)
+	source_object.data['amountOfRows'] = amountOfRows
+	source_object.data['A'] = np.array(A)
 	
-	
-	
-
-
 # Runs As Rigid As Possible deformation on the mesh M, using a list of handles given by H. A handle is a list of vertices tupled with a transform matrix which might be rigid (identity)
 def ARAP(source_mesh, deformed_mesh, H):
 	 # Get a BMesh representation
 	bm = bmesh.new()              # create an empty BMesh
 	bm.from_mesh(source_mesh)   # fill it in from a Mesh
 
+	'''Handle existing deformed mesh'''
 
 	#Computes Local Step 
 	Rvs = []
@@ -158,6 +159,75 @@ def ARAP(source_mesh, deformed_mesh, H):
 		print(Rv)
 
 		Rvs.append(Rv)
+
+
+		#Sets up b
+		amountOfcolumns = 3
+		amountOfRows = source_object.data['amountOfRows'] 
+
+		#Stores b
+		b = np.zeros((amountOfRows, amountOfcolumns))
+
+		#Use KD-Tree to link vertices to indices in bm.verts
+		size = len(bm.verts)
+		verticesKD_Tree = mathutils.kdtree.KDTree(size)
+		for i, v in enumerate(bm.verts):
+			verticesKD_Tree.insert(v.co, i)
+		verticesKD_Tree.balance()
+
+		#Make new list, because bm.verts was being a bitch.
+		vertices  = [vert.co for vert in bm.verts]
+
+		#Used to count which row we are currently working at
+		rowCount = 0
+
+		#Fills b
+		for index, vertex in enumerate(bm.verts):
+
+			#Get oneRing neighbours of vertex
+			one_ringNeighbours = [edge.other_vert(vertex) for edge in vertex.link_edges]
+
+			for neighbour in one_ringNeighbours:
+
+				#Get oneRing neighbours of neighbour
+				neighboursNeighbours = [edge.other_vert(neighbour) for edge in neighbour.link_edges]
+				#Find matching neighbours
+				matchingNeighbours =  list(set(one_ringNeighbours) & set(neighboursNeighbours))
+		
+				#Use these to compute weights, see https://in.answers.yahoo.com/question/index?qid=20110530115210AA2eAW1
+				aAlpha = neighbour.co - matchingNeighbours[0].co
+				aBeta  = neighbour.co - matchingNeighbours[1].co
+				bAlpha = vertex.co - matchingNeighbours[0].co
+				bBeta  = vertex.co - matchingNeighbours[1].co
+
+				tanAlpha = ((aAlpha.cross(bAlpha)).magnitude) / (aAlpha.dot(bAlpha))
+				tanBeta  = ((aBeta.cross(bBeta)).magnitude) / (aBeta.dot(bBeta))
+				cotAlpha = 1/tanAlpha
+				cotBeta  = 1/tanBeta 
+
+				Wiv = 0.5*(cotAlpha + cotBeta)
+				#AMIR: Some people asked what to do with negative cotangent weight, 
+				#because they commonly take sqrt(w_ij) to put into the ||Ax-b||^2 expression. 
+				#The weights should not overly negative in reasonable triangles, 
+				#so try and use w_{ij}={small positive epsilon} as a cheap workaround. For instance w_{ij}=10e-3.
+				if (Wiv < 0):
+					Wiv = 10e-3
+
+				#RowInput => sqrt(Wiv)(xv-xi)Rv
+				vertexIdx = verticesKD_Tree.find(vertex.co)[1]
+				rowInput  = math.sqrt(Wiv)*(vertex.co - neighbour.co)*Rvs[vertexIdx]
+				
+				b[rowCount]=  rowInput
+
+				#update row
+				rowCount += 1
+
+		#b'= b - A (   0   )
+		#          (X'Const)
+		A = np.matrix(source_object.data['A'])
+		Zero..XPrimeConst = 
+		bPrime = b - A * Zero..XPrimeConst
+
    
 	
 
