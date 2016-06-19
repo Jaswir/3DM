@@ -109,14 +109,14 @@ def Precompute(source_object):
 	source_object.data['precomputed_data'] = np.array(L)
 	source_object.data['amountOfRows'] = amountOfRows
 	source_object.data['A'] = np.array(A)
+
+	print("Checkpoint 0 PRECOMPUTE")
 	
 # Runs As Rigid As Possible deformation on the mesh M, using a list of handles given by H. A handle is a list of vertices tupled with a transform matrix which might be rigid (identity)
-def ARAP(source_mesh, deformed_mesh, H):
+def ARAP(source_mesh, deformed_mesh, H, start):
 	 # Get a BMesh representation
 	bm = bmesh.new()              # create an empty BMesh
 	bm.from_mesh(source_mesh)   # fill it in from a Mesh
-
-	'''Handle existing deformed mesh'''
 
 	#Computes Local Step 
 	Rvs = []
@@ -158,14 +158,13 @@ def ARAP(source_mesh, deformed_mesh, H):
 			sigmaTag = np.array([[s[0],0,0], [0,s[1],0], [0,0,s[2]]])
 			#Computes reflection resistant  Rv
 			Rv = np.dot(np.dot(U, sigmaTag), vT)
-		print(Rv)
-
 		Rvs.append(Rv)
 
-
+		print("Checkpoint 1 RVS")
+		print('It took {0:0.1f} seconds to complete RVS'.format(time.time() - start))
 		#Sets up b
 		amountOfcolumns = 3
-		amountOfRows = int(source_object.data['amountOfRows'])
+		amountOfRows = int(source_mesh['amountOfRows'])
 
 		#Stores b
 		b = np.zeros((amountOfRows, amountOfcolumns))
@@ -183,7 +182,12 @@ def ARAP(source_mesh, deformed_mesh, H):
 		#Used to count which row we are currently working at
 		rowCount = 0
 
-		#Fills b
+
+		print("Checkpoint 2 Before LOOP ARAP")
+		print('It took {0:0.1f} seconds to arrive at before loop ARAP'.format(time.time() - start))
+		#b'= b - A (   0   ) <= last thing we call ZeroXPrimeConst
+		#          (X'Const)
+		#Fills b and ZeroXPrimeConst
 		for index, vertex in enumerate(bm.verts):
 
 			#Get oneRing neighbours of vertex
@@ -225,11 +229,12 @@ def ARAP(source_mesh, deformed_mesh, H):
 				rowCount += 1
 
 
-		print("THUNDERSTRUCK YEAHYEAHYEAH")
+		print("Checkpoint 3 AFTER LOOP ARAP")
+		print('It took {0:0.1f} seconds to arrive at end of loop ARAP'.format(time.time() - start))
 		#b'= b - A (   0   )
 		#          (X'Const)
-		A = np.matrix(source_object.data['A'])
-		#Zero..XPrimeConst = 
+		A = np.matrix(source_mesh['A'])
+		#ZeroXPrimeConst = 0
 		#bPrime = b - A * Zero..XPrimeConst
 
    
@@ -243,11 +248,12 @@ def main():
 	
 	# TODO: Precompute A'^T * A if the data is dirty or does not exist, and store it with the source object
 	Precompute(source)
-	
-	# TODO: Perform As Rigid As Possible deformation on the source object in the first iteration, and on a deformed object if it exists
-	ARAP(source.data, get_deformed_object(source).data, get_handles(source))
+	print('It took {0:0.1f} seconds to complete Precompute'.format(time.time() - start))
 
-	print('It took {0:0.1f} seconds'.format(time.time() - start))
+	# TODO: Perform As Rigid As Possible deformation on the source object in the first iteration, and on a deformed object if it exists
+	ARAP(source.data, get_deformed_object(source).data, get_handles(source), start)
+
+	
 
 
 	
