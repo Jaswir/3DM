@@ -11,6 +11,8 @@ import scipy
 from mathutils import *
 import mathutils
 from scipy.sparse import csr_matrix
+import time
+
 
 # Runs the precalculation process, storing the precomputation data with the object that is being deformed
 def Precompute(source_object):
@@ -163,7 +165,7 @@ def ARAP(source_mesh, deformed_mesh, H):
 
 		#Sets up b
 		amountOfcolumns = 3
-		amountOfRows = source_object.data['amountOfRows'] 
+		amountOfRows = int(source_object.data['amountOfRows'])
 
 		#Stores b
 		b = np.zeros((amountOfRows, amountOfcolumns))
@@ -222,18 +224,20 @@ def ARAP(source_mesh, deformed_mesh, H):
 				#update row
 				rowCount += 1
 
+
+		print("THUNDERSTRUCK YEAHYEAHYEAH")
 		#b'= b - A (   0   )
 		#          (X'Const)
 		A = np.matrix(source_object.data['A'])
-		Zero..XPrimeConst = 
-		bPrime = b - A * Zero..XPrimeConst
+		#Zero..XPrimeConst = 
+		#bPrime = b - A * Zero..XPrimeConst
 
    
 	
 
 def main():
 
-
+	start = time.time()
 	# TODO: Check for an existing deformed mesh, if so use that as an iteration, if not use a mesh named 'source' as the initial mesh.
 	source = bpy.data.objects['source']
 	
@@ -241,7 +245,9 @@ def main():
 	Precompute(source)
 	
 	# TODO: Perform As Rigid As Possible deformation on the source object in the first iteration, and on a deformed object if it exists
-	#ARAP(source.data, get_deformed_object(source).data, get_handles(source))
+	ARAP(source.data, get_deformed_object(source).data, get_handles(source))
+
+	print('It took {0:0.1f} seconds'.format(time.time() - start))
 
 
 	
