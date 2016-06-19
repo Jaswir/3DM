@@ -114,6 +114,7 @@ def Precompute(source_object):
 	
 # Runs As Rigid As Possible deformation on the mesh M, using a list of handles given by H. A handle is a list of vertices tupled with a transform matrix which might be rigid (identity)
 def ARAP(source_mesh, deformed_mesh, H, start):
+
 	 # Get a BMesh representation
 	bm = bmesh.new()              # create an empty BMesh
 	bm.from_mesh(source_mesh)   # fill it in from a Mesh
@@ -160,82 +161,84 @@ def ARAP(source_mesh, deformed_mesh, H, start):
 			Rv = np.dot(np.dot(U, sigmaTag), vT)
 		Rvs.append(Rv)
 
-		print("Checkpoint 1 RVS")
-		print('It took {0:0.1f} seconds to complete RVS'.format(time.time() - start))
-		#Sets up b
-		amountOfcolumns = 3
-		amountOfRows = int(source_mesh['amountOfRows'])
+	print("Checkpoint 1 RVS")
+	print('It took {0:0.1f} seconds to complete RVS'.format(time.time() - start))
+	#Sets up b
+	amountOfcolumns = 3
+	amountOfRows = int(source_mesh['amountOfRows'])
 
-		#Stores b
-		b = np.zeros((amountOfRows, amountOfcolumns))
+	#Stores b
+	b = np.zeros((amountOfRows, amountOfcolumns))
 
-		#Use KD-Tree to link vertices to indices in bm.verts
-		size = len(bm.verts)
-		verticesKD_Tree = mathutils.kdtree.KDTree(size)
-		for i, v in enumerate(bm.verts):
-			verticesKD_Tree.insert(v.co, i)
-		verticesKD_Tree.balance()
+	#Use KD-Tree to link vertices to indices in bm.verts
+	size = len(bm.verts)
+	verticesKD_Tree = mathutils.kdtree.KDTree(size)
+	for i, v in enumerate(bm.verts):
+		verticesKD_Tree.insert(v.co, i)
+	verticesKD_Tree.balance()
 
-		#Make new list, because bm.verts was being a bitch.
-		vertices  = [vert.co for vert in bm.verts]
+	#Make new list, because bm.verts was being a bitch.
+	vertices  = [vert.co for vert in bm.verts]
 
-		#Used to count which row we are currently working at
-		rowCount = 0
-
-
-		print("Checkpoint 2 Before LOOP ARAP")
-		print('It took {0:0.1f} seconds to arrive at before loop ARAP'.format(time.time() - start))
-		#b'= b - A (   0   ) <= last thing we call ZeroXPrimeConst
-		#          (X'Const)
-		#Fills b and ZeroXPrimeConst
-		for index, vertex in enumerate(bm.verts):
-
-			#Get oneRing neighbours of vertex
-			one_ringNeighbours = [edge.other_vert(vertex) for edge in vertex.link_edges]
-
-			for neighbour in one_ringNeighbours:
-
-				#Get oneRing neighbours of neighbour
-				neighboursNeighbours = [edge.other_vert(neighbour) for edge in neighbour.link_edges]
-				#Find matching neighbours
-				matchingNeighbours =  list(set(one_ringNeighbours) & set(neighboursNeighbours))
-		
-				#Use these to compute weights, see https://in.answers.yahoo.com/question/index?qid=20110530115210AA2eAW1
-				aAlpha = neighbour.co - matchingNeighbours[0].co
-				aBeta  = neighbour.co - matchingNeighbours[1].co
-				bAlpha = vertex.co - matchingNeighbours[0].co
-				bBeta  = vertex.co - matchingNeighbours[1].co
-
-				tanAlpha = ((aAlpha.cross(bAlpha)).magnitude) / (aAlpha.dot(bAlpha))
-				tanBeta  = ((aBeta.cross(bBeta)).magnitude) / (aBeta.dot(bBeta))
-				cotAlpha = 1/tanAlpha
-				cotBeta  = 1/tanBeta 
-
-				Wiv = 0.5*(cotAlpha + cotBeta)
-				#AMIR: Some people asked what to do with negative cotangent weight, 
-				#because they commonly take sqrt(w_ij) to put into the ||Ax-b||^2 expression. 
-				#The weights should not overly negative in reasonable triangles, 
-				#so try and use w_{ij}={small positive epsilon} as a cheap workaround. For instance w_{ij}=10e-3.
-				if (Wiv < 0):
-					Wiv = 10e-3
-
-				#RowInput => sqrt(Wiv)(xv-xi)Rv
-				vertexIdx = verticesKD_Tree.find(vertex.co)[1]
-				rowInput  = math.sqrt(Wiv)*(vertex.co - neighbour.co)*Rvs[vertexIdx]
-				
-				b[rowCount]=  rowInput
-
-				#update row
-				rowCount += 1
+	#Used to count which row we are currently working at
+	rowCount = 0
 
 
-		print("Checkpoint 3 AFTER LOOP ARAP")
-		print('It took {0:0.1f} seconds to arrive at end of loop ARAP'.format(time.time() - start))
-		#b'= b - A (   0   )
-		#          (X'Const)
-		A = np.matrix(source_mesh['A'])
-		#ZeroXPrimeConst = 0
-		#bPrime = b - A * Zero..XPrimeConst
+	print("Checkpoint 2 Before LOOP ARAP")
+	print('It took {0:0.1f} seconds to arrive at before loop ARAP'.format(time.time() - start))
+	#b'= b - A (   0   ) <= last thing we call ZeroXPrimeConst
+	#          (X'Const)
+	#Fills b and ZeroXPrimeConst
+	for index, vertex in enumerate(bm.verts):
+
+		#Get oneRing neighbours of vertex
+		one_ringNeighbours = [edge.other_vert(vertex) for edge in vertex.link_edges]
+
+		for neighbour in one_ringNeighbours:
+
+			#Get oneRing neighbours of neighbour
+			neighboursNeighbours = [edge.other_vert(neighbour) for edge in neighbour.link_edges]
+			#Find matching neighbours
+			matchingNeighbours =  list(set(one_ringNeighbours) & set(neighboursNeighbours))
+	
+			#Use these to compute weights, see https://in.answers.yahoo.com/question/index?qid=20110530115210AA2eAW1
+			aAlpha = neighbour.co - matchingNeighbours[0].co
+			aBeta  = neighbour.co - matchingNeighbours[1].co
+			bAlpha = vertex.co - matchingNeighbours[0].co
+			bBeta  = vertex.co - matchingNeighbours[1].co
+
+			tanAlpha = ((aAlpha.cross(bAlpha)).magnitude) / (aAlpha.dot(bAlpha))
+			tanBeta  = ((aBeta.cross(bBeta)).magnitude) / (aBeta.dot(bBeta))
+			cotAlpha = 1/tanAlpha
+			cotBeta  = 1/tanBeta 
+
+			Wiv = 0.5*(cotAlpha + cotBeta)
+			#AMIR: Some people asked what to do with negative cotangent weight, 
+			#because they commonly take sqrt(w_ij) to put into the ||Ax-b||^2 expression. 
+			#The weights should not overly negative in reasonable triangles, 
+			#so try and use w_{ij}={small positive epsilon} as a cheap workaround. For instance w_{ij}=10e-3.
+			if (Wiv < 0):
+				Wiv = 10e-3
+
+
+			#RowInput => sqrt(Wiv)(xv-xi)Rv
+			vertexIdx = verticesKD_Tree.find(vertex.co)[1]
+			sqrtWivxv_xi = np.array(math.sqrt(Wiv)*(vertex.co - neighbour.co))
+			Rv =  Rvs[vertexIdx]
+			rowInput  = np.dot(sqrtWivxv_xi , Rv)
+			
+			b[rowCount]=  rowInput
+
+			#update row
+			rowCount += 1
+
+
+	print("Checkpoint 3 AFTER LOOP ARAP")
+	print('It took {0:0.1f} seconds to arrive at end of loop ARAP'.format(time.time() - start))
+	#b'= b - A (   0   )
+	#          (X'Const)
+	A = np.matrix(source_mesh['A'])
+	#bPrime = b - A * Zero..XPrimeConst
 
    
 	
