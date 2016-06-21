@@ -18,7 +18,6 @@ import time
 
 # Runs the precalculation process, storing the precomputation data with the object that is being deformed
 def Precompute(source_object):
-
     print("HOUSTON SPOTTED ACTIVITY")
     # Get a BMesh representation
     bm = bmesh.new()              # create an empty BMesh
@@ -140,11 +139,11 @@ def Precompute(source_object):
             
     #Stores oldA, for computing b'      
     oldA = A
-    
+
     #Computes A'TA' and prefactors the matrix
     APrime = csc_matrix(APrime)
     APrimeT = csc_matrix(APrime.T)
-    APrimeTAPrime = APrimeT * APrime
+    APrimeTAPrime = csc_matrix(APrimeT * APrime)
     lu = sla.splu(APrimeTAPrime)
 
     #Reduces lu object to explicit representation of the decomposition
@@ -161,15 +160,15 @@ def Precompute(source_object):
     #- A
     #- A'T
     #- amountOfrows
-    #- weights
+    #- sqrtWivTimesxvMinxi
     #to use further in the computation of ARAP, covnert to np.array 
-    #since these can be stored
+    #since np.array can be stored and csc_matrix not
     source_object.data['precomputed_data_L'] = np.array(L)
     source_object.data['precomputed_data_U'] = np.array(U)
     source_object.data['precomputed_data_Pr'] = np.array(Pr.todense())
     source_object.data['precomputed_data_Pc'] = np.array(Pc.todense())
     source_object.data['precomputed_data_amountOfRows'] = amountOfRows
-    source_object.data['precomputed_data_A'] = np.array(oldA)
+    source_object.data['precomputed_data_A'] = np.array(oldA.todense())
     source_object.data['precomputed_data_APrimeT'] = np.array(APrimeT.todense())
     source_object.data['sqrtWivTimesxvMinxi'] = sqrtWivTimesxvMinxi
 
@@ -324,12 +323,94 @@ def setMaterial(ob, mat):
     me = ob.data
     me.materials.append(mat)
 
+def getHandleNames():
+    # Only search up to (and not including) this number of handles
+    max_handles = 10
+    handleNames = []
+    handleDestinationNames = []
+    handleTransforms = []
+    destinationTransforms = []
+    # For all numbered handles
+    for i in range(max_handles):
+
+        # Construct the handles representative name
+        handle_name = 'handle_' + str(i)
+
+        if bpy.data.objects.get(handle_name) is not None:
+            handleNames.append(handle_name)
+            handleTransforms.append(get_transform_of_object(handle_name))
+
+             # If a destination box exists
+            handle_dest_name = handle_name + '_dest'
+            if bpy.data.objects.get(handle_dest_name) is not None:
+                handleDestinationNames.append(handle_dest_name)
+                destinationTransforms.append(get_transform_of_object(handle_dest_name))
+
+    return[handleNames , handleDestinationNames, handleTransforms, destinationTransforms]
+
+#Checks whether handles  have been added/removed/changed
+#or whether no previousHandles which must mean precompute
+def precomputeIsDirty(source):
+    #Check whether handles have been added/removed/changed:
+    handles = getHandleNames()
+    previousHandles = None
+    if 'previousHandles' in source.data:
+        PackedpreviousHandles = source.data['previousHandles']
+        #Unpack from bpy structure
+        unpackedpreviousHandles0 = list(PackedpreviousHandles[0])
+        unpackedpreviousHandles1 = list(PackedpreviousHandles[1])
+        unpackedpreviousHandles2 = [Matrix(item) for item in PackedpreviousHandles[2]]
+        unpackedpreviousHandles3 = [Matrix(item) for item in PackedpreviousHandles[3]]
+
+        previousHandles = [unpackedpreviousHandles0 , unpackedpreviousHandles1, unpackedpreviousHandles2, unpackedpreviousHandles3]
+
+        #If handles got added or removed, change previousHandles to current
+        #set handles have changed!
+        if(not(handles == previousHandles)):
+            source.data['previousHandles'] = handles
+
+    else:
+        #There were no handle names store before, so must precompute
+        source.data['previousHandles']  = handles
+
+    return not(handles == previousHandles)
+
 def main():
 
     # #Used to time computation speed on 1 or more checkpoints
     start = time.time()
-
     source = bpy.data.objects['source']
+
+    
+    
+    #Precomputes A'^T * A if the data is dirty or does not exist, and stores its decomposition,
+    #amountOfrows in A' , 
+    #sqrtWivTimesxvMinxi and,
+    #A'T (both used to compute b in global step, but this is constant so can be computed once(assuming clean data))
+    #along with with the source object.
+    DataisDirty = precomputeIsDirty(source)
+    data = ['precomputed_data_L', 'precomputed_data_U', 'precomputed_data_Pr', 'precomputed_data_Pc', 'precomputed_data_amountOfRows', 'precomputed_data_A' 
+    , 'precomputed_data_APrimeT', 'sqrtWivTimesxvMinxi']
+    dataExists =  all([dataItem in source.data for dataItem in data])
+
+    print("Is the data dirty?: {0}" .format(DataisDirty))
+    print("Does the data exist?: {0}" .format(dataExists))
+    if(DataisDirty or not(dataExists)):
+        Precompute(source)
+
+    print('It took {0:0.1f} seconds to complete Precompute'.format(time.time() - start))
+
+    #Perform As Rigid As Possible deformation on the source object in the first iteration, and on a deformed object if it exists
+    deformed = None
+    existingDeformed = bpy.data.objects.get("deformed") is not None
+    #Checks for an existing deformed mesh
+    if existingDeformed:
+        #If there exists one already, use that as the deformed_mesh for ARAP
+        deformed = bpy.data.objects['deformed'].data
+    else:
+        #Otherwise make an initial guess
+        deformed = get_deformed_object(source).data
+
 
     #Gets the diagonal of the bounding box of source
     #and take 10^-4 of that as a tolerance for absolute mesh movement between iterations
@@ -358,21 +439,6 @@ def main():
     diagonalOfBoundingBox = np.linalg.norm(v1-v2)
 
     tolerance = 10e-5 * diagonalOfBoundingBox
-    
-    # TODO: Precompute A'^T * A if the data is dirty or does not exist, and store it with the source object
-    Precompute(source)
-    print('It took {0:0.1f} seconds to complete Precompute'.format(time.time() - start))
-
-    #Perform As Rigid As Possible deformation on the source object in the first iteration, and on a deformed object if it exists
-    deformed = None
-    existingDeformed = bpy.data.objects.get("deformed") is not None
-    #Checks for an existing deformed mesh
-    if existingDeformed:
-        #If there exists one already, use that as the deformed_mesh for ARAP
-        deformed = bpy.data.objects['deformed'].data
-    else:
-        #Otherwise make an initial guess
-        deformed = get_deformed_object(source).data
 
     #Iterate until the maximum absolute movement between two iteration is smaller than tolerance
     previousIteration = ARAP(source.data, deformed, get_handles(source), existingDeformed, start)
