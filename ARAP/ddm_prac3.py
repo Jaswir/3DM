@@ -11,8 +11,9 @@ import scipy
 from mathutils import *
 import mathutils
 import scipy.sparse.linalg as sla
-from scipy.sparse import csc_matrix
-from scipy.sparse import lil_matrix
+from scipy.sparse import *
+from numpy import *
+from scipy import *
 import time
 
 # Runs the precalculation process, storing the precomputation data with the object that is being deformed
@@ -58,10 +59,10 @@ def Precompute(source_object):
             amountOfRows += len(one_ringNeighbours)
 
     #Stores APrime
-    APrime = np.zeros((amountOfRows, amountOfcolumns))
+    APrime = lil_matrix((amountOfRows, amountOfcolumns))
 
     #Store A (needed for computing b...)
-    A = np.zeros((amountOfRows , amountOfcolumns + len(CONSTindices)))
+    A = lil_matrix((amountOfRows , amountOfcolumns + len(CONSTindices)))
     #Used to count which row we are currently working at
     rowCount = 0
 
@@ -78,18 +79,28 @@ def Precompute(source_object):
             neighboursNeighbours = [edge.other_vert(neighbour) for edge in neighbour.link_edges]
             #Find matching neighbours
             matchingNeighbours =  list(set(one_ringNeighbours) & set(neighboursNeighbours))
+
+            s = len(matchingNeighbours)
+            
+                
     
             #Use these to compute weights, see https://in.answers.yahoo.com/question/index?qid=20110530115210AA2eAW1
             aAlpha = neighbour.co - matchingNeighbours[0].co
-            aBeta  = neighbour.co - matchingNeighbours[1].co
             bAlpha = vertex.co - matchingNeighbours[0].co
-            bBeta  = vertex.co - matchingNeighbours[1].co
-
-            tanAlpha = ((aAlpha.cross(bAlpha)).magnitude) / (aAlpha.dot(bAlpha))
-            tanBeta  = ((aBeta.cross(bBeta)).magnitude) / (aBeta.dot(bBeta))
+            tanAlpha = ((aAlpha.cross(bAlpha)).magnitude) / (aAlpha.dot(bAlpha))   
             cotAlpha = 1/tanAlpha
-            cotBeta  = 1/tanBeta 
 
+            #Handles flat meshes, which may have only one common neighbour
+            #and are not enclosed, by taking cotBeta = 0
+            cotBeta = 0 
+            if s == 2:
+                aBeta  = neighbour.co - matchingNeighbours[1].co
+                bBeta  = vertex.co - matchingNeighbours[1].co
+                tanBeta  = ((aBeta.cross(bBeta)).magnitude) / (aBeta.dot(bBeta))
+                cotBeta  = 1/tanBeta 
+
+
+            
             Wiv = 0.5*(cotAlpha + cotBeta)
             #AMIR: Some people asked what to do with negative cotangent weight, 
             #because they commonly take sqrt(w_ij) to put into the ||Ax-b||^2 expression. 
@@ -129,8 +140,7 @@ def Precompute(source_object):
             
     #Stores oldA, for computing b'      
     oldA = A
-
-
+    
     #Computes A'TA' and prefactors the matrix
     APrime = csc_matrix(APrime)
     APrimeT = csc_matrix(APrime.T)
@@ -163,11 +173,9 @@ def Precompute(source_object):
     source_object.data['precomputed_data_APrimeT'] = np.array(APrimeT.todense())
     source_object.data['sqrtWivTimesxvMinxi'] = sqrtWivTimesxvMinxi
 
-    
 # Runs As Rigid As Possible deformation on the mesh M, using a list of handles given by H. A handle is a list of vertices tupled with a transform matrix which might be rigid (identity)
 def ARAP(source_mesh, deformed_mesh, H, existingDeformed, start):
-
-     # Get a BMesh representation for source
+    # Get a BMesh representation for source
     bm = bmesh.new()              # create an empty BMesh
     bm.from_mesh(source_mesh)   # fill it in from a Mesh
 
@@ -183,7 +191,7 @@ def ARAP(source_mesh, deformed_mesh, H, existingDeformed, start):
             translationMatrix = handle[1]
             for index, vertex in enumerate(deformed_mesh.vertices):
                 if index in CONST:
-                    vertex.co = vertex.co * translationMatrix
+                    vertex.co =  translationMatrix * vertex.co 
 
     #After possible initial guess, changing the deformed mesh
     #Get a BMesh representation for deformed 
@@ -304,7 +312,6 @@ def ARAP(source_mesh, deformed_mesh, H, existingDeformed, start):
     #which can then be compared with tolerance to decide if ARAP is done
     return deformed_mesh
 
-
 #Used for visualisation purposes (e.g points as spheres)
 def makeMaterial(name, diffuse, specular, alpha):
     mat = bpy.data.materials.new(name)
@@ -319,10 +326,9 @@ def setMaterial(ob, mat):
 
 def main():
 
-    #Used to time computation speed on 1 or more checkpoints
+    # #Used to time computation speed on 1 or more checkpoints
     start = time.time()
 
-    # TODO: Check for an existing deformed mesh, if so use that as an iteration, if not use a mesh named 'source' as the initial mesh.
     source = bpy.data.objects['source']
 
     #Gets the diagonal of the bounding box of source
@@ -431,7 +437,6 @@ def get_deformed_object(source):
         # Copy data block from the old object into the new object
         ob_new.data = source.data.copy()
         ob_new.scale = source.scale
-        ob_new.rotation_euler = source.rotation_euler
         ob_new.location = source.location
     
     return bpy.data.objects[name]
