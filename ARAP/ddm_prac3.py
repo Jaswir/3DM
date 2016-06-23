@@ -81,26 +81,30 @@ def Precompute(source_object):
 
             s = len(matchingNeighbours)
             
-                
-    
+            
+            #Set weight to 1 incase division by 0, or not enclosed one ring 
+            #Resulting in only 1 angle instead of two
+            Wiv = 1
+
             #Use these to compute weights, see https://in.answers.yahoo.com/question/index?qid=20110530115210AA2eAW1
             aAlpha = neighbour.co - matchingNeighbours[0].co
             bAlpha = vertex.co - matchingNeighbours[0].co
-            tanAlpha = ((aAlpha.cross(bAlpha)).magnitude) / (aAlpha.dot(bAlpha))   
-            cotAlpha = 1/tanAlpha
+            aAlphacrossbAlphadotmagnitude = ((aAlpha.cross(bAlpha)).magnitude)
+            aAlphadotbAlpha = aAlpha.dot(bAlpha)
+            if not(aAlphadotbAlpha == 0):
+                tanAlpha =  aAlphacrossbAlphadotmagnitude/aAlphadotbAlpha 
+                cotAlpha = 1/tanAlpha
+                cotBeta = 0 
+                if s == 2:
+                    aBeta  = neighbour.co - matchingNeighbours[1].co
+                    bBeta  = vertex.co - matchingNeighbours[1].co
+                    aBetacrossbBetadotmagnitude = aBeta.cross(bBeta).magnitude
+                    aBetadotbBeta = aBeta.dot(bBeta)
+                    if not(aBetadotbBeta == 0):
+                        tanBeta  = aBetacrossbBetadotmagnitude / aBetadotbBeta
+                        cotBeta  = 1/tanBeta 
+                        Wiv = 0.5*(cotAlpha + cotBeta)
 
-            #Handles flat meshes, which may have only one common neighbour
-            #and are not enclosed, by taking cotBeta = 0
-            cotBeta = 0 
-            if s == 2:
-                aBeta  = neighbour.co - matchingNeighbours[1].co
-                bBeta  = vertex.co - matchingNeighbours[1].co
-                tanBeta  = ((aBeta.cross(bBeta)).magnitude) / (aBeta.dot(bBeta))
-                cotBeta  = 1/tanBeta 
-
-
-            
-            Wiv = 0.5*(cotAlpha + cotBeta)
             #AMIR: Some people asked what to do with negative cotangent weight, 
             #because they commonly take sqrt(w_ij) to put into the ||Ax-b||^2 expression. 
             #The weights should not overly negative in reasonable triangles, 
@@ -183,14 +187,14 @@ def ARAP(source_mesh, deformed_mesh, H, existingDeformed, start):
     size = len(bm.verts)
     
     # If this is the initial guess, apply translation on constraint vertices of deformed_mesh
-    if not(existingDeformed):
-        for handle in H:
-            #Use to find out whether a vertex is a constraint vertex and get initial guess if needed
-            CONST = handle[0]
-            translationMatrix = handle[1]
-            for index, vertex in enumerate(deformed_mesh.vertices):
-                if index in CONST:
-                    vertex.co =  translationMatrix * vertex.co 
+    #if not(existingDeformed):
+    for handle in H:
+        #Use to find out whether a vertex is a constraint vertex and get initial guess if needed
+        CONST = handle[0]
+        translationMatrix = handle[1]
+        for index, vertex in enumerate(deformed_mesh.vertices):
+            if index in CONST:
+                vertex.co =  vertex.co *  translationMatrix
 
     #After possible initial guess, changing the deformed mesh
     #Get a BMesh representation for deformed 
