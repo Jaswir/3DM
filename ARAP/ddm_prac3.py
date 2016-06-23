@@ -28,7 +28,11 @@ def Precompute(source_object):
     CONSTindices = []
     for handle in get_handles(source_object):
         CONSTindices += handle[0]
+    #Gets sorted + unique (no duplicates) list
     CONSTindices.sort()
+    CONSTindices = list(set(CONSTindices))
+    
+
   
     #INSTEAD OF REMOVING CONSTRAINT COLUMSN AFTERWARDS
     #WE PREVENT ADDING THEM IN THE FIRST PLACE.
@@ -64,7 +68,6 @@ def Precompute(source_object):
     A = lil_matrix((amountOfRows , amountOfcolumns + len(CONSTindices)))
     #Used to count which row we are currently working at
     rowCount = 0
-
     #Used to store sqrt(Wiv)(xv-xi) (constant)
     sqrtWivTimesxvMinxi = []
     for index, vertex in enumerate(bm.verts):
@@ -458,7 +461,6 @@ def main():
             absoluteMovement = np.linalg.norm(np.array(previousIterationVertex.co) - np.array(currentIterationVertex.co))
             absoluteMovements.append(absoluteMovement)
         maximumAbsoluteMovementOfVertices = max(absoluteMovements)
-
 
         print('It took {0:0.1f} seconds to complete iteration {1} of ARAP'.format((time.time() - start) , 0))
         print("The max absolute movement of vertices between iterations was: {0}" .format(maximumAbsoluteMovementOfVertices))
