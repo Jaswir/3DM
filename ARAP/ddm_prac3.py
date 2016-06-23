@@ -194,7 +194,7 @@ def ARAP(source_mesh, deformed_mesh, H, existingDeformed, start):
         translationMatrix = handle[1]
         for index, vertex in enumerate(deformed_mesh.vertices):
             if index in CONST:
-                vertex.co =  vertex.co *  translationMatrix
+                vertex.co =  translationMatrix * vertex.co 
 
     #After possible initial guess, changing the deformed mesh
     #Get a BMesh representation for deformed 
@@ -255,7 +255,7 @@ def ARAP(source_mesh, deformed_mesh, H, existingDeformed, start):
     for handle in H:
         CONSTindices += handle[0]
 
-    for index, vertex in enumerate(bm.verts):
+    for index, vertex in enumerate(dm.verts):
 
         #If vertex is a constraint index, the proper coördinates should be inserted in the matrix
         if index in CONSTindices:
