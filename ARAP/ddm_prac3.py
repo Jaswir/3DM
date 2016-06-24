@@ -162,22 +162,27 @@ def Precompute(source_object):
     Pc = lil_matrix((n, n))
     Pc[np.arange(n), lu.perm_c] = 1
 
-    #Stores:
+    
+    #Stores: 
     #- lu decomposition
     #- A
     #- A'T
     #- amountOfrows
     #- sqrtWivTimesxvMinxi
-    #to use further in the computation of ARAP, covnert to np.array 
-    #since np.array can be stored and csc_matrix not
-    source_object.data['precomputed_data_L'] = np.array(L)
-    source_object.data['precomputed_data_U'] = np.array(U)
-    source_object.data['precomputed_data_Pr'] = np.array(Pr.todense())
-    source_object.data['precomputed_data_Pc'] = np.array(Pc.todense())
-    source_object.data['precomputed_data_amountOfRows'] = amountOfRows
-    source_object.data['precomputed_data_A'] = np.array(oldA.todense())
-    source_object.data['precomputed_data_APrimeT'] = np.array(APrimeT.todense())
+    #to use further in the computation of ARAP.
+    #Sparse matrices are Sparse Packaged (since sparse matrices can't be saved on
+    #a carrying object normally).
+    #This makes for efficiënt storing as only indices of non-zero elements are stored
+    #See Package_SparseMatrix() for more details.
+    Package_SparseMatrix(oldA, source_object, 'oldA')
+    Package_SparseMatrix(APrimeT, source_object, 'APrimeT')
+    Package_SparseMatrix(L, source_object, 'L')
+    Package_SparseMatrix(U, source_object, 'U')
+    Package_SparseMatrix(Pr, source_object, 'Pr')
+    Package_SparseMatrix(Pc, source_object, 'Pc')
+
     source_object.data['sqrtWivTimesxvMinxi'] = sqrtWivTimesxvMinxi
+    source_object.data['precomputed_data_amountOfRows'] = amountOfRows
 
 # Runs As Rigid As Possible deformation on the mesh M, using a list of handles given by H. A handle is a list of vertices tupled with a transform matrix which might be rigid (identity)
 def ARAP(source_mesh, deformed_mesh, H, existingDeformed, start):
@@ -286,19 +291,23 @@ def ARAP(source_mesh, deformed_mesh, H, existingDeformed, start):
     #          (X'Const)
     ZeroXPrimeConst = csc_matrix(ZeroXPrimeConst)
     b = csc_matrix(b)
-    A = csc_matrix(source_mesh['precomputed_data_A'])
+    
+    APackageShape = tuple(source_mesh['oldASparsePackageShape'])
+    rowIndices, columnIndices, values = [list(item) for item in source_mesh['oldASparsePackageDecomposition']]
+
+    A = UnPackage_SparsePackage(source_mesh, 'oldA')
 
     bPrime = b - (A * ZeroXPrimeConst)
 
     #Retrieve the component to compose A'TA', and recompose A'TA'
-    L = csc_matrix(source_mesh['precomputed_data_L'])
-    U = csc_matrix(source_mesh['precomputed_data_U'])
-    Pr = csc_matrix(source_mesh['precomputed_data_Pr'])
-    Pc = csc_matrix(source_mesh['precomputed_data_Pc'])
+    L = UnPackage_SparsePackage(source_mesh, 'L')
+    U = UnPackage_SparsePackage(source_mesh, 'U')
+    Pr = UnPackage_SparsePackage(source_mesh, 'Pr')
+    Pc = UnPackage_SparsePackage(source_mesh, 'Pc')
     APrimeTAPrime = csc_matrix((Pr.T * (L* U) * Pc.T).A)
 
     #Retrieve A'T necessary to multiply with bPrime
-    APrimeT = csc_matrix(source_mesh['precomputed_data_APrimeT'])
+    APrimeT = UnPackage_SparsePackage(source_mesh, 'APrimeT')
     APrimeTxbPrime = csc_matrix(APrimeT*bPrime)
 
     #Computes xPrime
@@ -329,6 +338,25 @@ def makeMaterial(name, diffuse, specular, alpha):
 def setMaterial(ob, mat):
     me = ob.data
     me.materials.append(mat)
+
+#SparsePackaging: given a sparseMatrix, the bpyObject to carry relevant data and a key
+#decomposes matrix into shape and decomposition: rowIndices, columnIndices and values 
+#at respective row,column positions.
+def Package_SparseMatrix(sparseMatrix, bpyObject, stringKey):
+    bpyObject.data[stringKey + 'SparsePackageShape'] = tuple(sparseMatrix.shape)
+    bpyObject.data[stringKey + 'SparsePackageDecomposition'] = np.array(scipy.sparse.find(sparseMatrix))
+
+#Returns an unpackaged sparse package, given 
+#the bpyObject carrying the data and key of the string.
+def UnPackage_SparsePackage(bpyObject, stringKey):
+    packageShape = tuple(bpyObject[stringKey + 'SparsePackageShape'])
+    rowIndices, columnIndices, values = [list(item) for item in bpyObject[stringKey + 'SparsePackageDecomposition']]
+
+    sparseMatrix = lil_matrix(packageShape)
+    for (rowIndex, columnIndex, value) in zip(rowIndices, columnIndices, values):
+        sparseMatrix[rowIndex, columnIndex] = value
+    return csc_matrix(sparseMatrix)
+
 
 def getHandleNames():
     # Only search up to (and not including) this number of handles
@@ -388,16 +416,14 @@ def main():
     start = time.time()
     source = bpy.data.objects['source']
 
-    
-    
     #Precomputes A'^T * A if the data is dirty or does not exist, and stores its decomposition,
     #amountOfrows in A' , 
     #sqrtWivTimesxvMinxi and,
     #A'T (both used to compute b in global step, but this is constant so can be computed once(assuming clean data))
     #along with with the source object.
     DataisDirty = precomputeIsDirty(source)
-    data = ['precomputed_data_L', 'precomputed_data_U', 'precomputed_data_Pr', 'precomputed_data_Pc', 'precomputed_data_amountOfRows', 'precomputed_data_A' 
-    , 'precomputed_data_APrimeT', 'sqrtWivTimesxvMinxi']
+    data = ['precomputed_data_L', 'precomputed_data_U', 'precomputed_data_Pr', 'precomputed_data_Pc', 'precomputed_data_amountOfRows'
+    , 'precomputed_data_APrimeT', 'sqrtWivTimesxvMinxi', 'oldASparsePackageDecomposition', 'oldASparsePackageShape']
     dataExists =  all([dataItem in source.data for dataItem in data])
 
     print("Is the data dirty?: {0}" .format(DataisDirty))
@@ -462,7 +488,7 @@ def main():
             absoluteMovements.append(absoluteMovement)
         maximumAbsoluteMovementOfVertices = max(absoluteMovements)
 
-        print('It took {0:0.1f} seconds to complete iteration {1} of ARAP'.format((time.time() - start) , 0))
+        print('It took {0:0.1f} seconds to complete iteration {1} of ARAP'.format((time.time() - start) , iteration))
         print("The max absolute movement of vertices between iterations was: {0}" .format(maximumAbsoluteMovementOfVertices))
         print("The tolerance is: {0}" .format(tolerance))
         print("maximumAbsoluteMovementOfVertices < tolerance = {0}" .format(maximumAbsoluteMovementOfVertices < tolerance))
