@@ -195,14 +195,14 @@ def ARAP(source_mesh, deformed_mesh, H, existingDeformed, start):
     size = len(bm.verts)
     
     # If this is the initial guess, apply translation on constraint vertices of deformed_mesh
-    #if not(existingDeformed):
-    for handle in H:
-        #Use to find out whether a vertex is a constraint vertex and get initial guess if needed
-        CONST = handle[0]
-        translationMatrix = handle[1]
-        for index, vertex in enumerate(deformed_mesh.vertices):
-            if index in CONST:
-                vertex.co =  translationMatrix * vertex.co 
+    if not(existingDeformed):
+        for handle in H:
+            #Use to find out whether a vertex is a constraint vertex and get initial guess if needed
+            CONST = handle[0]
+            translationMatrix = handle[1]
+            for index, vertex in enumerate(deformed_mesh.vertices):
+                if index in CONST:
+                    vertex.co =  translationMatrix * vertex.co 
 
     #After possible initial guess, changing the deformed mesh
     #Get a BMesh representation for deformed 
