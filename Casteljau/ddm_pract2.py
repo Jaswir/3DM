@@ -124,7 +124,7 @@ def DeCasteljau(A, n, s):
 		return A
 
 	#Used to compute all the cas values
-	stepSize = 0.5/(s+1)
+	stepSize = 1/ ((n-1)*s + n - 1)
 	totalCasValues = int(1/stepSize)
 
 	casCols = []
@@ -138,7 +138,6 @@ def DeCasteljau(A, n, s):
 		for k in range (0, totalCasValues+1):
 			#Computes all the cas points for a  column  of the surface 
 			casValue = k * stepSize
-
 			#Holds the points for castelJau algorithm on a curve
 			casPoints = []   
 			result = column        
@@ -153,34 +152,35 @@ def DeCasteljau(A, n, s):
 				length -= 1
 			casCols.append(result[0])
 
-	#Using the result from the previous DeCasteljau for the vertical dimension,
-	#DeCasteljau for the horizontal dimension is computed, resulting in 2D computed DeCastelJau.
+
+	# Using the result from the previous DeCasteljau for the vertical dimension,
+	# DeCasteljau for the horizontal dimension is computed, resulting in 2D computed DeCastelJau.
 	DeCasteljau2D = []
 	for i in range(0, totalCasValues+1):
 	   
-		#Fill 1 row
-		row = []
-		for j in range(0, n):
-			row.append(casCols[i+j*(totalCasValues+1)])
+	  #Fill 1 row
+	  row = []
+	  for j in range(0, n):
+	      row.append(casCols[i+j*(totalCasValues+1)])
 
    
-		for k in range (0, totalCasValues+1):
-			#Computes all the cas points for a row of the surface  
-			casValue = k * stepSize
+	  for k in range (0, totalCasValues+1):
+	      #Computes all the cas points for a row of the surface  
+	      casValue = k * stepSize
 
-			#Holds the points for DeCasteljau algorithm on a curve
-			casPoints = []   
-			result = row
-			length = n
+	      #Holds the points for DeCasteljau algorithm on a curve
+	      casPoints = []   
+	      result = row
+	      length = n
 
-			#Calculates the final point on the curve using casValue
-			while(length != 1):
-				casPoints = []
-				for l in range(0, length-1):
-					casPoints.append(result[l]*(1-casValue) + result[l+1]*casValue)
-				result = casPoints
-				length -= 1
-			DeCasteljau2D.append(result[0])
+	      #Calculates the final point on the curve using casValue
+	      while(length != 1):
+	          casPoints = []
+	          for l in range(0, length-1):
+	              casPoints.append(result[l]*(1-casValue) + result[l+1]*casValue)
+	          result = casPoints
+	          length -= 1
+	      DeCasteljau2D.append(result[0])
 
 	#Converts all vectors to 3tuples
 	DeCasteljau2D = [(x,y,z) for (x,y,z) in DeCasteljau2D]
@@ -400,33 +400,32 @@ def LineIntersect(A, n, p1, p2, e):
 def main(operator, context):
 	
 	#Startup variables
-	
 	n = 4
 	length = 3
 	s = 2
 
 	#DeCasteljau needs different n for faces, which can be computed as follows.
-	nFaceCas = int(1+ 1/(0.5/(s+1)))
+	nFaceCas = ((n-1)*s + n)
 	
 	#Step 1: Control Polygon
 	A = ControlMesh(n, length)
 
 
 	#Step 3:  Surface Approximation
-	#B = DeCasteljau(A, n, s)
+	B = DeCasteljau(A, n, s)
+
 
 	# Step 2: Mesh Display of Control Polygon and CastelJau
 	ShowMesh(A, n, "display")
+	ShowMesh(B, nFaceCas, "CastelJau")
 
-
-	# ShowMesh(B, nFaceCas, "CastelJau")
 
 	# #Step 4: Intersection Test
-	# p1 = (2,1,5)
-	# p2 = (4,3,5)
+	p1 = (2,1,5)
+	p2 = (4,3,5)
 	
-	# print("\n Line defined by points p1: "+ str(p1) + ", p2: " + str(p2) \
-	#   + "INTERSECTION:" + str(LineIntersect(A, n, p1, p2, 0.01)))
+	print("\n Line defined by points p1: "+ str(p1) + ", p2: " + str(p2) \
+	  + "INTERSECTION:" + str(LineIntersect(A, n, p1, p2, 0.01)))
 
 # BLENDER UI
 # ----------
